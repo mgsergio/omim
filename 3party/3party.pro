@@ -2,8 +2,11 @@
 
 TEMPLATE = subdirs
 
-SUBDIRS = freetype fribidi minizip jansson tomcrypt protobuf osrm expat \
-    succinct \
+SUBDIRS = freetype fribidi \
+    minizip jansson \
+    tomcrypt protobuf \
+    osrm expat \
+    succinct hunspell \
 
 !linux* {
 SUBDIRS += opening_hours \
