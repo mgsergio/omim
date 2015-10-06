@@ -1,10 +1,14 @@
 #include "base/string_utils.hpp"
 #include "base/assert.hpp"
+#include "base/stemmer.hpp"
 
 #include "std/target_os.hpp"
 #include "std/iterator.hpp"
 #include "std/cmath.hpp"
 #include "std/iomanip.hpp"
+
+#include "platform/platform.hpp"
+#include "platform/preferred_languages.hpp"
 
 #include <boost/algorithm/string.hpp> // boost::trim
 
@@ -163,6 +167,15 @@ bool IsASCIIString(string const & str)
     if (str[i] & 0x80)
       return false;
   return true;
+}
+
+UniString Stem(strings::UniString const & uniStringWord)
+{
+  static my::Stemmer const stemmer(languages::GetCurrentOrig(),
+                                   GetPlatform().ResourcesDir());
+  auto const & word = strings::ToUtf8(uniStringWord);
+  auto const & stem = strings::MakeUniString(stemmer.Stem(word));
+  return stem.size() ? stem : uniStringWord;
 }
 
 bool StartsWith(string const & s1, char const * s2)

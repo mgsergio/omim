@@ -58,6 +58,11 @@ UniString MakeUniString(string const & utf8s);
 string ToUtf8(UniString const & s);
 bool IsASCIIString(string const & str);
 
+/// Return a stem of a word
+/// @param uniStringWord a word to be stemmed;
+/// @return a stem of a uniStringWord or a word if can't find stem
+UniString Stem(UniString const & uniStringWord);
+
 inline string DebugPrint(UniString const & s)
 {
   return ToUtf8(s);

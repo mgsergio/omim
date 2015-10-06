@@ -31,6 +31,7 @@ SOURCES += \
     thread_pool.cpp \
     threaded_container.cpp \
     timer.cpp \
+    stemmer.cpp \
 
 HEADERS += \
     SRC_FIRST.hpp \
@@ -82,3 +83,4 @@ HEADERS += \
     threaded_priority_queue.hpp \
     timer.hpp \
     worker_thread.hpp \
+    stemmer.hpp \

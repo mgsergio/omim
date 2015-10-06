@@ -68,9 +68,7 @@ public:
   template <class ToDo>
   void ForEachTypeByName(int8_t locale, StringT const & name, ToDo toDo) const
   {
-    typedef typename Name2CatContT::const_iterator IterT;
-
-    pair<IterT, IterT> range = m_name2type.equal_range(make_pair(locale, name));
+    auto range = m_name2type.equal_range(make_pair(locale, name));
     while (range.first != range.second)
     {
       toDo(range.first->second);

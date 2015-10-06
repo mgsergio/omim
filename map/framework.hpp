@@ -566,7 +566,7 @@ public:
   BookmarkManager & GetBookmarkManager() { return m_bmManager; }
 
 public:
-  using TRouteBuildingCallback = function<void(routing::IRouter::ResultCode, 
+  using TRouteBuildingCallback = function<void(routing::IRouter::ResultCode,
                                                vector<storage::TIndex> const &,
                                                vector<storage::TIndex> const &)>;
   using TRouteProgressCallback = function<void(float)>;

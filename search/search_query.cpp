@@ -366,16 +366,20 @@ void Query::ForEachCategoryTypes(ToDo toDo) const
     size_t const tokensCount = m_tokens.size();
     for (size_t i = 0; i < tokensCount; ++i)
     {
+      auto const & stemmedToken = strings::Stem(m_tokens[i]);
       for (int j = 0; j < localesCount; ++j)
-        m_pCategories->ForEachTypeByName(arrLocales[j], m_tokens[i], bind<void>(ref(toDo), i, _1));
+        m_pCategories->ForEachTypeByName(arrLocales[j], stemmedToken,
+                                         bind<void>(ref(toDo), i, _1));
 
       ProcessEmojiIfNeeded(m_tokens[i], i, toDo);
     }
 
     if (!m_prefix.empty())
     {
+      auto const & stemmedPrefix = strings::Stem(m_prefix);
       for (int j = 0; j < localesCount; ++j)
-        m_pCategories->ForEachTypeByName(arrLocales[j], m_prefix, bind<void>(ref(toDo), tokensCount, _1));
+        m_pCategories->ForEachTypeByName(arrLocales[j], stemmedPrefix,
+                                         bind<void>(ref(toDo), tokensCount, _1));
 
       ProcessEmojiIfNeeded(m_prefix, tokensCount, toDo);
     }
@@ -407,7 +411,9 @@ void Query::SetQuery(string const & query)
 
   // Split input query by tokens with possible last prefix.
   search::Delimiters delims;
-  SplitUniString(NormalizeAndSimplifyString(query), MakeBackInsertFunctor(m_tokens), delims);
+  SplitUniString(NormalizeAndSimplifyString(query),
+                 MakeBackInsertFunctor(m_tokens),
+                 delims);
 
   bool checkPrefix = true;
 
