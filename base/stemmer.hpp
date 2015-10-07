@@ -21,16 +21,16 @@ class Stemmer
   Stemmer & operator=(Stemmer &&) = delete;
 
   string Stem(string const & word) const;
+  static bool DictsExist(string const & locale, string const & dictsPath);
 
  private:
   string GetDictEncoding() const;
-  string InputToDictEncoding(string const & word) const;
-  string DictToInputEncoding(string const & word) const;
 
-  bool DictExists(string const & path); // const ?
+  static bool DictExists(string const & path);
+  static string MakeAffPath(string const & locale, string const & dictsPath);
+  static string MakeDicPath(string const & locale, string const & dictsPath);
 
  private:
-  // @TODO(mgsergio) get from env/config/whatever
   string const m_dictsPath;
   string const m_locale;
 
