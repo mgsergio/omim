@@ -225,6 +225,8 @@ void Query::SetInputLocale(string const & locale)
     SetLanguage(LANG_INPUT, StringUtf8Multilang::GetLangIndex(languages::Normalize(locale)));
 
     m_inputLocaleCode = CategoriesHolder::MapLocaleToInteger(locale);
+
+    m_inputLocale = locale;
   }
 }
 
@@ -366,7 +368,7 @@ void Query::ForEachCategoryTypes(ToDo toDo) const
     size_t const tokensCount = m_tokens.size();
     for (size_t i = 0; i < tokensCount; ++i)
     {
-      auto const & stemmedToken = strings::Stem(m_tokens[i]);
+      auto const & stemmedToken = strings::Stem(m_tokens[i], GetInputLocale());
       for (int j = 0; j < localesCount; ++j)
         m_pCategories->ForEachTypeByName(arrLocales[j], stemmedToken,
                                          bind<void>(ref(toDo), i, _1));
@@ -376,7 +378,7 @@ void Query::ForEachCategoryTypes(ToDo toDo) const
 
     if (!m_prefix.empty())
     {
-      auto const & stemmedPrefix = strings::Stem(m_prefix);
+      auto const & stemmedPrefix = strings::Stem(m_prefix, GetInputLocale());
       for (int j = 0; j < localesCount; ++j)
         m_pCategories->ForEachTypeByName(arrLocales[j], stemmedPrefix,
                                          bind<void>(ref(toDo), tokensCount, _1));

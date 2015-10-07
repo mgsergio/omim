@@ -86,11 +86,12 @@ public:
 
   inline void SetSearchInWorld(bool b) { m_worldSearch = b; }
 
-  /// Suggestions language code, not the same as we use in mwm data
-  int8_t m_inputLocaleCode, m_currentLocaleCode;
-
   void SetPreferredLocale(string const & locale);
   void SetInputLocale(string const & locale);
+
+  string GetInputLocale() const { return m_inputLocale; }
+  uint8_t GetInputLocaleCode() const { return m_inputLocaleCode; }
+  uint8_t GetCurrentLocaleCode() const { return m_currentLocaleCode; }
 
   void SetQuery(string const & query);
   inline bool IsEmptyQuery() const { return (m_prefix.empty() && m_tokens.empty()); }
@@ -201,6 +202,10 @@ private:
   buffer_vector<strings::UniString, 32> m_tokens;
   strings::UniString m_prefix;
   set<uint32_t> m_prefferedTypes;
+
+  /// Suggestions language code, not the same as we use in mwm data
+  int8_t m_inputLocaleCode, m_currentLocaleCode;
+  string m_inputLocale;
 
 #ifdef HOUSE_SEARCH_TEST
   strings::UniString m_house;

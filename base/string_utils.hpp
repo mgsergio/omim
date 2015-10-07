@@ -60,8 +60,9 @@ bool IsASCIIString(string const & str);
 
 /// Return a stem of a word
 /// @param uniStringWord a word to be stemmed;
+/// @param inputLanguage select dicts using language.
 /// @return a stem of a uniStringWord or a word if can't find stem
-UniString Stem(UniString const & uniStringWord);
+UniString Stem(UniString const & uniStringWord, string const & inputLanguage);
 
 inline string DebugPrint(UniString const & s)
 {

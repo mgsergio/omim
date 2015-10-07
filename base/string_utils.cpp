@@ -2,10 +2,11 @@
 #include "base/assert.hpp"
 #include "base/stemmer.hpp"
 
-#include "std/target_os.hpp"
-#include "std/iterator.hpp"
 #include "std/cmath.hpp"
 #include "std/iomanip.hpp"
+#include "std/iterator.hpp"
+#include "std/target_os.hpp"
+#include "std/tuple.hpp"
 
 #include "platform/platform.hpp"
 #include "platform/preferred_languages.hpp"
@@ -169,12 +170,28 @@ bool IsASCIIString(string const & str)
   return true;
 }
 
-UniString Stem(strings::UniString const & uniStringWord)
+UniString Stem(strings::UniString const & uniStringWord, string const & inputLanguage)
 {
-  static my::Stemmer const stemmer(languages::GetCurrentOrig(),
-                                   GetPlatform().ResourcesDir());
+  using TStemmerPtr = unique_ptr<my::Stemmer>;
+
+  static map<string, TStemmerPtr> stemmerForLanguage;
+
+  auto stemmerIt = stemmerForLanguage.find(inputLanguage);
+  if (stemmerIt == end(stemmerForLanguage))
+  {
+    string const & resourcesDir = GetPlatform().ResourcesDir();
+    TStemmerPtr stemmerPtr;
+    if (my::Stemmer::DictsExist(inputLanguage, resourcesDir))
+      stemmerPtr = make_unique<my::Stemmer>(inputLanguage, resourcesDir);
+    tie(stemmerIt, ignore) = stemmerForLanguage.emplace(inputLanguage, move(stemmerPtr));
+  }
+
+  if (stemmerIt->second == nullptr)
+    return uniStringWord;
+
   auto const & word = strings::ToUtf8(uniStringWord);
-  auto const & stem = strings::MakeUniString(stemmer.Stem(word));
+  auto const & stem = strings::MakeUniString(stemmerIt->second->Stem(word));
+
   return stem.size() ? stem : uniStringWord;
 }
 
