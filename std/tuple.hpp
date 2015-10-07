@@ -8,6 +8,8 @@
 
 using std::tuple;
 using std::make_tuple;
+using std::tie;
+using std::ignore;
 //using std::get; // "get" is very common name, use "get" member function
 
 #ifdef DEBUG_NEW
