@@ -14,11 +14,11 @@ namespace
 {
 map<Metadata::EType, string> const kKeyValues =
 {
-  {Metadata::FMD_ELE, "12345"},
-  {Metadata::FMD_CUISINE, "greek;mediterranean"},
-  {Metadata::FMD_EMAIL, "cool@email.at"},
+  {Metadata::EType::FMD_ELE, "12345"},
+  {Metadata::EType::FMD_CUISINE, "greek;mediterranean"},
+  {Metadata::EType::FMD_EMAIL, "cool@email.at"},
   // This string is longer than 255 bytes.
-  {Metadata::FMD_URL, "http://rskxmkjwnikfnjqhyv"
+  {Metadata::EType::FMD_URL, "http://rskxmkjwnikfnjqhyv"
                       "kpjgaghhyhukjyenduiuanxgb"
                       "mndtlpfphdgaizfcpzuiuspcp"
                       "umeojwvekvjprlutwjmxudyzr"
@@ -35,7 +35,7 @@ map<Metadata::EType, string> const kKeyValues =
 UNIT_TEST(Feature_Metadata_GetSet)
 {
   Metadata m;
-  Metadata::EType const type = Metadata::FMD_ELE;
+  Metadata::EType const type = Metadata::EType::FMD_ELE;
   // Absent types should return empty values.
   TEST_EQUAL(m.Get(type), "", ());
   m.Set(type, "12345");
@@ -83,7 +83,7 @@ UNIT_TEST(Feature_Serialization)
 
     for (auto const & value : kKeyValues)
       TEST_EQUAL(serialized.Get(value.first), value.second, ());
-    TEST_EQUAL(serialized.Get(Metadata::FMD_OPERATOR), "", ());
+    TEST_EQUAL(serialized.Get(Metadata::EType::FMD_OPERATOR), "", ());
     TEST_EQUAL(serialized.Size(), kKeyValues.size(), ());
   }
 }
@@ -91,7 +91,7 @@ UNIT_TEST(Feature_Serialization)
 UNIT_TEST(Feature_Metadata_GetWikipedia)
 {
   Metadata m;
-  Metadata::EType const wikiType = Metadata::FMD_WIKIPEDIA;
+  Metadata::EType const wikiType = Metadata::EType::FMD_WIKIPEDIA;
   m.Set(wikiType, "en:Article");
   TEST_EQUAL(m.Get(wikiType), "en:Article", ());
 #ifdef OMIM_OS_MOBILE

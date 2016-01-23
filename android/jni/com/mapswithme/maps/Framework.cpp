@@ -537,7 +537,7 @@ void Framework::InjectMetadata(JNIEnv * env, jclass const clazz, jobject const m
   {
     // TODO: It is not a good idea to pass raw strings to UI. Calling separate getters should be a better way.
     // Upcoming change: how to pass opening hours (parsed) into Editor's UI? How to get edited changes back?
-    jstring metaString = t == feature::Metadata::FMD_WIKIPEDIA ?
+    jstring metaString = t == feature::Metadata::EType::FMD_WIKIPEDIA ?
                          jni::ToJavaString(env, metadata.GetWikiURL()) :
                          jni::ToJavaString(env, metadata.Get(t));
     env->CallVoidMethod(mapObject, addId, t, metaString);
@@ -599,7 +599,7 @@ pair<jintArray, jobjectArray> NativeMetadataToJavaMetadata(JNIEnv * env, feature
     auto const type = metaTypes[i];
     arr[i] = type;
     // TODO: Refactor code to use separate getters for each metadata.
-    jstring metaString = type == Metadata::FMD_WIKIPEDIA ?
+    jstring metaString = type == Metadata::EType::FMD_WIKIPEDIA ?
                          jni::ToJavaString(env, metadata.GetWikiURL()) :
                          jni::ToJavaString(env, metadata.Get(type));
     env->SetObjectArrayElement(j_metaValues, i, metaString);

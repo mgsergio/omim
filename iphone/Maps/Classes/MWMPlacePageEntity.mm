@@ -31,23 +31,23 @@ void putFields(NSUInteger eTypeValue, NSUInteger ppValue)
 
 void initFieldsMap()
 {
-  putFields(Metadata::FMD_URL, MWMPlacePageCellTypeURL);
-  putFields(Metadata::FMD_WEBSITE, MWMPlacePageCellTypeWebsite);
-  putFields(Metadata::FMD_PHONE_NUMBER, MWMPlacePageCellTypePhoneNumber);
-  putFields(Metadata::FMD_OPEN_HOURS, MWMPlacePageCellTypeOpenHours);
-  putFields(Metadata::FMD_EMAIL, MWMPlacePageCellTypeEmail);
-  putFields(Metadata::FMD_POSTCODE, MWMPlacePageCellTypePostcode);
-  putFields(Metadata::FMD_INTERNET, MWMPlacePageCellTypeWiFi);
-  putFields(Metadata::FMD_CUISINE, MWMPlacePageCellTypeCuisine);
+  putFields(Metadata::EType::FMD_URL, MWMPlacePageCellTypeURL);
+  putFields(Metadata::EType::FMD_WEBSITE, MWMPlacePageCellTypeWebsite);
+  putFields(Metadata::EType::FMD_PHONE_NUMBER, MWMPlacePageCellTypePhoneNumber);
+  putFields(Metadata::EType::FMD_OPEN_HOURS, MWMPlacePageCellTypeOpenHours);
+  putFields(Metadata::EType::FMD_EMAIL, MWMPlacePageCellTypeEmail);
+  putFields(Metadata::EType::FMD_POSTCODE, MWMPlacePageCellTypePostcode);
+  putFields(Metadata::EType::FMD_INTERNET, MWMPlacePageCellTypeWiFi);
+  putFields(Metadata::EType::FMD_CUISINE, MWMPlacePageCellTypeCuisine);
 
-  ASSERT_EQUAL(kMetaFieldsMap[Metadata::FMD_URL], MWMPlacePageCellTypeURL, ());
-  ASSERT_EQUAL(kMetaFieldsMap[MWMPlacePageCellTypeURL], Metadata::FMD_URL, ());
-  ASSERT_EQUAL(kMetaFieldsMap[Metadata::FMD_WEBSITE], MWMPlacePageCellTypeWebsite, ());
-  ASSERT_EQUAL(kMetaFieldsMap[MWMPlacePageCellTypeWebsite], Metadata::FMD_WEBSITE, ());
-  ASSERT_EQUAL(kMetaFieldsMap[Metadata::FMD_POSTCODE], MWMPlacePageCellTypePostcode, ());
-  ASSERT_EQUAL(kMetaFieldsMap[MWMPlacePageCellTypePostcode], Metadata::FMD_POSTCODE, ());
+  ASSERT_EQUAL(kMetaFieldsMap[Metadata::EType::FMD_URL], MWMPlacePageCellTypeURL, ());
+  ASSERT_EQUAL(kMetaFieldsMap[MWMPlacePageCellTypeURL], Metadata::EType::FMD_URL, ());
+  ASSERT_EQUAL(kMetaFieldsMap[Metadata::EType::FMD_WEBSITE], MWMPlacePageCellTypeWebsite, ());
+  ASSERT_EQUAL(kMetaFieldsMap[MWMPlacePageCellTypeWebsite], Metadata::EType::FMD_WEBSITE, ());
+  ASSERT_EQUAL(kMetaFieldsMap[Metadata::EType::FMD_POSTCODE], MWMPlacePageCellTypePostcode, ());
+  ASSERT_EQUAL(kMetaFieldsMap[MWMPlacePageCellTypePostcode], Metadata::EType::FMD_POSTCODE, ());
   ASSERT_EQUAL(kMetaFieldsMap[MWMPlacePageCellTypeSpacer], 0, ());
-  ASSERT_EQUAL(kMetaFieldsMap[Metadata::FMD_MAXSPEED], 0, ());
+  ASSERT_EQUAL(kMetaFieldsMap[Metadata::EType::FMD_MAXSPEED], 0, ());
 }
 
 NSString * mwmToOSMCuisineString(NSString * mwmCuisine)
@@ -142,7 +142,7 @@ NSString * mwmToOSMCuisineString(NSString * mwmCuisine)
 
 - (void)addMetaField:(NSUInteger)value
 {
-  NSAssert(value >= Metadata::FMD_COUNT, @"Incorrect enum value");
+  NSAssert(value >= Metadata::EType::FMD_COUNT, @"Incorrect enum value");
   MWMPlacePageCellType const field = static_cast<MWMPlacePageCellType>(value);
   if (find(gMetaFieldsMap.begin(), gMetaFieldsMap.end(), field) == gMetaFieldsMap.end())
     return;
@@ -152,7 +152,7 @@ NSString * mwmToOSMCuisineString(NSString * mwmCuisine)
 
 - (void)removeMetaField:(NSUInteger)value
 {
-  NSAssert(value >= Metadata::FMD_COUNT, @"Incorrect enum value");
+  NSAssert(value >= Metadata::EType::FMD_COUNT, @"Incorrect enum value");
   auto const it = find(m_fields.begin(), m_fields.end(), value);
   if (it != m_fields.end())
     m_fields.erase(it);
@@ -160,7 +160,7 @@ NSString * mwmToOSMCuisineString(NSString * mwmCuisine)
 
 - (void)setMetaField:(NSUInteger)key value:(string const &)value
 {
-  NSAssert(key >= Metadata::FMD_COUNT, @"Incorrect enum value");
+  NSAssert(key >= Metadata::EType::FMD_COUNT, @"Incorrect enum value");
   MWMPlacePageCellType const cellType = static_cast<MWMPlacePageCellType>(key);
   if (value.empty())
   {
@@ -233,7 +233,7 @@ NSString * mwmToOSMCuisineString(NSString * mwmCuisine)
     {
       switch (type)
       {
-        case Metadata::FMD_CUISINE:
+        case Metadata::EType::FMD_CUISINE:
         {
           [self deserializeCuisine:@(metadata.Get(type).c_str())];
           NSString * cuisine = [self getCellValue:MWMPlacePageCellTypeCuisine];
@@ -243,14 +243,14 @@ NSString * mwmToOSMCuisineString(NSString * mwmCuisine)
             self.category = [NSString stringWithFormat:@"%@ • %@", self.category, cuisine];
           break;
         }
-        case Metadata::FMD_ELE:
+        case Metadata::EType::FMD_ELE:
         {
           self.typeDescriptionValue = atoi(metadata.Get(type).c_str());
           if (self.type != MWMPlacePageEntityTypeBookmark)
             self.type = MWMPlacePageEntityTypeEle;
           break;
         }
-        case Metadata::FMD_OPERATOR:
+        case Metadata::EType::FMD_OPERATOR:
         {
           NSString * bank = @(metadata.Get(type).c_str());
           if (self.category.length)
@@ -259,22 +259,22 @@ NSString * mwmToOSMCuisineString(NSString * mwmCuisine)
             self.category = bank;
           break;
         }
-        case Metadata::FMD_STARS:
+        case Metadata::EType::FMD_STARS:
         {
           self.typeDescriptionValue = atoi(metadata.Get(type).c_str());
           if (self.type != MWMPlacePageEntityTypeBookmark)
             self.type = MWMPlacePageEntityTypeHotel;
           break;
         }
-        case Metadata::FMD_URL:
-        case Metadata::FMD_WEBSITE:
-        case Metadata::FMD_PHONE_NUMBER:
-        case Metadata::FMD_OPEN_HOURS:
-        case Metadata::FMD_EMAIL:
-        case Metadata::FMD_POSTCODE:
+        case Metadata::EType::FMD_URL:
+        case Metadata::EType::FMD_WEBSITE:
+        case Metadata::EType::FMD_PHONE_NUMBER:
+        case Metadata::EType::FMD_OPEN_HOURS:
+        case Metadata::EType::FMD_EMAIL:
+        case Metadata::EType::FMD_POSTCODE:
           [self setMetaField:kMetaFieldsMap[type] value:metadata.Get(type)];
           break;
-        case Metadata::FMD_INTERNET:
+        case Metadata::EType::FMD_INTERNET:
           [self setMetaField:kMetaFieldsMap[type] value:L(@"WiFi_available").UTF8String];
           break;
         default:
@@ -356,7 +356,7 @@ NSString * mwmToOSMCuisineString(NSString * mwmCuisine)
   }
   for (auto const & type : editableTypes)
   {
-    NSAssert(kMetaFieldsMap[type] >= Metadata::FMD_COUNT || kMetaFieldsMap[type] == 0, @"Incorrect enum value");
+    NSAssert(kMetaFieldsMap[type] >= Metadata::EType::FMD_COUNT || kMetaFieldsMap[type] == 0, @"Incorrect enum value");
     MWMPlacePageCellType const field = static_cast<MWMPlacePageCellType>(kMetaFieldsMap[type]);
     m_editableFields.insert(field);
   }
@@ -390,14 +390,14 @@ NSString * mwmToOSMCuisineString(NSString * mwmCuisine)
       case MWMPlacePageCellTypeWiFi:
       {
         Metadata::EType const fmdType = static_cast<Metadata::EType>(kMetaFieldsMap[cell.first]);
-        NSAssert(fmdType > 0 && fmdType < Metadata::FMD_COUNT, @"Incorrect enum value");
+        NSAssert(fmdType > 0 && fmdType < Metadata::EType::FMD_COUNT, @"Incorrect enum value");
         metadata.Set(fmdType, cell.second);
         break;
       }
       case MWMPlacePageCellTypeCuisine:
       {
         Metadata::EType const fmdType = static_cast<Metadata::EType>(kMetaFieldsMap[cell.first]);
-        NSAssert(fmdType > 0 && fmdType < Metadata::FMD_COUNT, @"Incorrect enum value");
+        NSAssert(fmdType > 0 && fmdType < Metadata::EType::FMD_COUNT, @"Incorrect enum value");
         NSString * osmCuisineStr = mwmToOSMCuisineString(@(cell.second.c_str()));
         metadata.Set(fmdType, osmCuisineStr.UTF8String);
         break;
@@ -537,7 +537,7 @@ NSString * mwmToOSMCuisineString(NSString * mwmCuisine)
     Bookmark * bookmark = static_cast<Bookmark *>(guard.m_controller.GetUserMarkForEdit(self.bac.second));
     if (!bookmark)
       return;
-  
+
     if (self.bookmarkColor)
       bookmark->SetType(self.bookmarkColor.UTF8String);
 
@@ -551,7 +551,7 @@ NSString * mwmToOSMCuisineString(NSString * mwmCuisine)
     if (self.bookmarkTitle)
       bookmark->SetName(self.bookmarkTitle.UTF8String);
   }
-  
+
   category->SaveToKMLFile();
 }
 

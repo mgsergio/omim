@@ -18,7 +18,7 @@ char constexpr const * kBaseWikiUrl =
 
 string Metadata::GetWikiURL() const
 {
-  string v = this->Get(FMD_WIKIPEDIA);
+  string v = this->Get(EType::FMD_WIKIPEDIA);
   if (v.empty())
     return v;
 
@@ -49,29 +49,29 @@ string DebugPrint(feature::Metadata::EType type)
   using feature::Metadata;
   switch (type)
   {
-  case Metadata::FMD_CUISINE: return "cuisine";
-  case Metadata::FMD_OPEN_HOURS: return "opening_hours";
-  case Metadata::FMD_PHONE_NUMBER: return "phone";
-  case Metadata::FMD_FAX_NUMBER: return "fax";
-  case Metadata::FMD_STARS: return "stars";
-  case Metadata::FMD_OPERATOR: return "operator";
-  case Metadata::FMD_URL: return "url";
-  case Metadata::FMD_WEBSITE: return "website";
-  case Metadata::FMD_INTERNET: return "internet_access";
-  case Metadata::FMD_ELE: return "elevation";
-  case Metadata::FMD_TURN_LANES: return "turn:lanes";
-  case Metadata::FMD_TURN_LANES_FORWARD: return "turn:lanes:forward";
-  case Metadata::FMD_TURN_LANES_BACKWARD: return "turn:lanes:backward";
-  case Metadata::FMD_EMAIL: return "email";
-  case Metadata::FMD_POSTCODE: return "addr:postcode";
-  case Metadata::FMD_WIKIPEDIA: return "wikipedia";
-  case Metadata::FMD_MAXSPEED: return "maxspeed";
-  case Metadata::FMD_FLATS: return "addr:flats";
-  case Metadata::FMD_HEIGHT: return "height";
-  case Metadata::FMD_MIN_HEIGHT: return "min_height";
-  case Metadata::FMD_DENOMINATION: return "denomination";
-  case Metadata::FMD_BUILDING_LEVELS: return "building:levels";
-  case Metadata::FMD_COUNT: CHECK(false, ("FMD_COUNT can not be used as a type."));
+  case Metadata::EType::FMD_CUISINE: return "cuisine";
+  case Metadata::EType::FMD_OPEN_HOURS: return "opening_hours";
+  case Metadata::EType::FMD_PHONE_NUMBER: return "phone";
+  case Metadata::EType::FMD_FAX_NUMBER: return "fax";
+  case Metadata::EType::FMD_STARS: return "stars";
+  case Metadata::EType::FMD_OPERATOR: return "operator";
+  case Metadata::EType::FMD_URL: return "url";
+  case Metadata::EType::FMD_WEBSITE: return "website";
+  case Metadata::EType::FMD_INTERNET: return "internet_access";
+  case Metadata::EType::FMD_ELE: return "elevation";
+  case Metadata::EType::FMD_TURN_LANES: return "turn:lanes";
+  case Metadata::EType::FMD_TURN_LANES_FORWARD: return "turn:lanes:forward";
+  case Metadata::EType::FMD_TURN_LANES_BACKWARD: return "turn:lanes:backward";
+  case Metadata::EType::FMD_EMAIL: return "email";
+  case Metadata::EType::FMD_POSTCODE: return "addr:postcode";
+  case Metadata::EType::FMD_WIKIPEDIA: return "wikipedia";
+  case Metadata::EType::FMD_MAXSPEED: return "maxspeed";
+  case Metadata::EType::FMD_FLATS: return "addr:flats";
+  case Metadata::EType::FMD_HEIGHT: return "height";
+  case Metadata::EType::FMD_MIN_HEIGHT: return "min_height";
+  case Metadata::EType::FMD_DENOMINATION: return "denomination";
+  case Metadata::EType::FMD_BUILDING_LEVELS: return "building:levels";
+  case Metadata::EType::FMD_COUNT: CHECK(false, ("FMD_COUNT can not be used as a type."));
   };
 
   return string();

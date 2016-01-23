@@ -77,7 +77,7 @@ void FeatureType::ApplyPatch(editor::XMLFeature const & xml)
   // m_params.rank =
   m_bCommonParsed = true;
 
-  for (auto const i : my::UpTo(1u, static_cast<uint32_t>(feature::Metadata::FMD_COUNT)))
+  for (auto const i : my::UpTo(1u, static_cast<uint32_t>(feature::Metadata::EType::FMD_COUNT)))
   {
     auto const type = static_cast<feature::Metadata::EType>(i);
     auto const attributeName = DebugPrint(type);
@@ -261,7 +261,7 @@ void FeatureType::ParseMetadata() const
   m_pLoader->ParseMetadata();
 
   if (HasInternet())
-    m_metadata.Set(Metadata::FMD_INTERNET, "wlan");
+    m_metadata.Set(Metadata::EType::FMD_INTERNET, "wlan");
 
   m_bMetadataParsed = true;
 }

@@ -12,37 +12,26 @@
 
 namespace feature
 {
+template <typename TMetadata>
+struct MetadataFieldCodes;
+
+template <typename TMetadata>
+using MetadataFieldCodesType = typename MetadataFieldCodes<TMetadata>::Type;
+
+template <typename TFieldCode>
 class MetadataBase
 {
-protected:
-  // TODO: Change uint8_t to appropriate type when FMD_COUNT reaches 256.
-  void Set(uint8_t type, string const & value)
-  {
-    auto found = m_metadata.find(type);
-    if (found == m_metadata.end())
-    {
-      if (!value.empty())
-        m_metadata[type] = value;
-    }
-    else
-    {
-      if (value.empty())
-        m_metadata.erase(found);
-      else
-        found->second = value;
-    }
-  }
-
 public:
-  string Get(uint8_t type) const
+
+  string Get(TFieldCode type) const
   {
     auto it = m_metadata.find(type);
     return (it == m_metadata.end()) ? string() : it->second;
   }
 
-  vector<uint8_t> GetPresentTypes() const
+  vector<TFieldCode> GetPresentTypes() const
   {
-    vector<uint8_t> types;
+    vector<TFieldCode> types;
     types.reserve(m_metadata.size());
 
     for (auto const & item : m_metadata)
@@ -73,7 +62,7 @@ public:
     for (size_t i = 0; i < sz; ++i)
     {
       auto const key = ReadVarUint<uint32_t>(src);
-      utils::ReadString(src, m_metadata[key]);
+      utils::ReadString(src, m_metadata[static_cast<TFieldCode>(key)]);
     }
   }
 
@@ -83,12 +72,31 @@ public:
   }
 
 protected:
-  map<uint8_t, string> m_metadata;
+  // TODO: Change uint8_t to appropriate type when FMD_COUNT reaches 256.
+  void Set(TFieldCode type, string const & value)
+  {
+    auto found = m_metadata.find(type);
+    if (found == m_metadata.end())
+    {
+      if (!value.empty())
+        m_metadata[type] = value;
+    }
+    else
+    {
+      if (value.empty())
+        m_metadata.erase(found);
+      else
+        found->second = value;
+    }
+  }
+
+  map<TFieldCode, string> m_metadata;
 };
 
-class Metadata : public MetadataBase
+class Metadata;
+template<>
+struct MetadataFieldCodes<Metadata>
 {
-public:
   /// @note! Do not change values here.
   /// Add new types to the end of list, before FMD_COUNT.
   enum EType
@@ -117,6 +125,15 @@ public:
     FMD_BUILDING_LEVELS = 22,
     FMD_COUNT
   };
+
+  using Type = EType;
+};
+
+class Metadata : public MetadataBase<MetadataFieldCodesType<Metadata>>
+{
+public:
+
+  using EType = MetadataFieldCodesType<Metadata>;
 
   void Set(EType type, string const & value)
   {
@@ -153,7 +170,7 @@ public:
     {
       src.Read(header, sizeof(header));
       src.Read(buffer, header[1]);
-      m_metadata[header[0] & 0x7F].assign(buffer, header[1]);
+      m_metadata[static_cast<EType>(header[0] & 0x7F)].assign(buffer, header[1]);
     } while (!(header[0] & 0x80));
   }
 
@@ -161,10 +178,17 @@ private:
   enum { kMaxStringLength = 255 };
 };
 
-class AddressData : public MetadataBase
+class AddressData;
+template <>
+struct MetadataFieldCodes<AddressData>
+{
+  enum Type { PLACE, STREET, POSTCODE };
+};
+
+class AddressData : public MetadataBase<MetadataFieldCodesType<AddressData>>
 {
 public:
-  enum Type { PLACE, STREET, POSTCODE };
+  using Type = MetadataFieldCodesType<AddressData>;
 
   void Add(Type type, string const & s)
   {

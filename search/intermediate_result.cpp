@@ -31,9 +31,9 @@ void ProcessMetadata(FeatureType const & ft, Result::Metadata & meta)
   ft.ParseMetadata();
   feature::Metadata const & src = ft.GetMetadata();
 
-  meta.m_cuisine = src.Get(feature::Metadata::FMD_CUISINE);
+  meta.m_cuisine = src.Get(feature::Metadata::EType::FMD_CUISINE);
 
-  string const openHours = src.Get(feature::Metadata::FMD_OPEN_HOURS);
+  string const openHours = src.Get(feature::Metadata::EType::FMD_OPEN_HOURS);
   if (!openHours.empty())
   {
     osmoh::OpeningHours oh(openHours);
@@ -47,7 +47,7 @@ void ProcessMetadata(FeatureType const & ft, Result::Metadata & meta)
   }
 
   meta.m_stars = 0;
-  (void) strings::to_int(src.Get(feature::Metadata::FMD_STARS), meta.m_stars);
+  (void) strings::to_int(src.Get(feature::Metadata::EType::FMD_STARS), meta.m_stars);
   meta.m_stars = my::clamp(meta.m_stars, 0, 5);
 }
 

@@ -166,7 +166,7 @@ StringUtf8Multilang EditorDialog::GetEditedNames() const
 Metadata EditorDialog::GetEditedMetadata() const
 {
   Metadata metadata;
-  for (int type = Metadata::FMD_CUISINE; type < Metadata::FMD_COUNT; ++type)
+  for (int type = Metadata::EType::FMD_CUISINE; type < Metadata::EType::FMD_COUNT; ++type)
   {
     QLineEdit * editor = findChild<QLineEdit *>(QString::fromStdString(DebugPrint(static_cast<Metadata::EType>(type))));
     if (editor)

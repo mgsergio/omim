@@ -531,12 +531,12 @@ void LoadedPathSegment::LoadPathGeometry(buffer_vector<TSeg, 8> const & buffer, 
       ft.ParseMetadata();
       Metadata const & md = ft.GetMetadata();
 
-      auto directionType = Metadata::FMD_TURN_LANES;
+      auto directionType = Metadata::EType::FMD_TURN_LANES;
 
       if (!ftypes::IsOneWayChecker::Instance()(ft))
       {
-        directionType = (startIdx < endIdx) ? Metadata::FMD_TURN_LANES_FORWARD
-                                            : Metadata::FMD_TURN_LANES_BACKWARD;
+        directionType = (startIdx < endIdx) ? Metadata::EType::FMD_TURN_LANES_FORWARD
+                                            : Metadata::EType::FMD_TURN_LANES_BACKWARD;
       }
       ParseLanes(md.Get(directionType), m_lanes);
     }
