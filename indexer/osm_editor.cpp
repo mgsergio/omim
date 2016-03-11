@@ -48,8 +48,8 @@ using editor::XMLFeature;
 namespace
 {
 constexpr char const * kEditorXMLFileName = "edits.xml";
+// TODO(mgsergio): Hide in notes.
 constexpr char const * kNotesXMLFileName = "notes.xml";
-constexpr char const * kConfigXMLFileName = "editor.xml";
 constexpr char const * kXmlRootNode = "mapsme";
 constexpr char const * kXmlMwmNode = "mwm";
 constexpr char const * kDeleteSection = "delete";
@@ -132,8 +132,7 @@ namespace osm
 // (e.g. insert/remove spaces after ';' delimeter);
 
 Editor::Editor()
-    : m_config(kConfigXMLFileName),
-      m_notes(editor::Notes::MakeNotes(GetNotesFilePath()))
+    : m_notes(editor::Notes::MakeNotes(GetNotesFilePath()))
 {
 }
 
