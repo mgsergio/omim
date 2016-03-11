@@ -521,6 +521,9 @@ bool Editor::HaveSomethingToUpload() const
 void Editor::UploadChanges(string const & key, string const & secret, TChangesetTags tags,
                            TFinishUploadCallback callBack)
 {
+  if (m_notes->UnuploadedNotesCount())
+    UploadNotes(key, secret);
+
   if (!HaveSomethingToUpload())
   {
     LOG(LDEBUG, ("There are no local edits to upload."));
