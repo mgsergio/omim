@@ -20,6 +20,13 @@
   self.title = L(@"other");
 }
 
+- (void)send
+{
+  if (!self.textView.text.length)
+    return;
+  [self sendNote:self.textView.text.UTF8String];
+}
+
 #pragma mark - UITableView
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section
