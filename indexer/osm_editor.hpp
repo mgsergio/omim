@@ -8,6 +8,7 @@
 #include "indexer/mwm_set.hpp"
 
 #include "editor/editor_config.hpp"
+#include "editor/editor_notes.hpp"
 #include "editor/new_feature_categories.hpp"
 #include "editor/xml_feature.hpp"
 
@@ -165,6 +166,9 @@ private:
 
   /// Contains information about what and how can be edited.
   editor::EditorConfig m_config;
+
+  /// Notes to be sent to osm.
+  shared_ptr<editor::Notes> m_notes;
 };  // class Editor
 
 string DebugPrint(Editor::FeatureStatus fs);
