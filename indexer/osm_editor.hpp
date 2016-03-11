@@ -24,7 +24,7 @@ namespace osm
 {
 class Editor final
 {
-  Editor() = default;
+  Editor();
 
 public:
   using TFeatureTypeFn = function<void(FeatureType &)>;  // Mimics Framework::TFeatureTypeFn.
@@ -113,6 +113,9 @@ public:
   NewFeatureCategories GetNewFeatureCategories() const;
 
   bool CreatePoint(uint32_t type, m2::PointD const & mercator, MwmSet::MwmId const & id, EditableMapObject & outFeature);
+
+  void CreateNote(m2::PointD const & point, string const & note);
+  void UploadNotes(string const & key, string const & secret);
 
   struct Stats
   {

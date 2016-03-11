@@ -757,6 +757,16 @@ bool Editor::CreatePoint(uint32_t type, m2::PointD const & mercator, MwmSet::Mwm
   return true;
 }
 
+void Editor::CreateNote(m2::PointD const & point, string const & note)
+{
+  m_notes->CreateNote(point, note);
+}
+
+void Editor::UploadNotes(string const & key, string const & secret)
+{
+  m_notes->Upload(OsmOAuth::ServerAuth({key, secret}));
+}
+
 string DebugPrint(Editor::FeatureStatus fs)
 {
   switch (fs)
