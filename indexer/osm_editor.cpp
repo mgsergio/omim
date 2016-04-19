@@ -930,11 +930,28 @@ bool Editor::CreatePoint(uint32_t type, m2::PointD const & mercator, MwmSet::Mwm
   return true;
 }
 
-void Editor::CreateNote(ms::LatLon const & latLon, FeatureID const & fid, string const & note)
+void Editor::CreateNote(ms::LatLon const & latLon, FeatureID const & fid,
+                        NoteProblemType const & type, string const & note)
 {
   auto const version = GetMwmCreationTimeByMwmId(fid.m_mwmId);
   auto const stringVersion = my::TimestampToString(my::SecondsSinceEpochToTimeT(version));
   ostringstream sstr(note, ios_base::ate);
+
+  if (type != NoteProblemType::General)
+  {
+    sstr << " User comments: \"";
+    switch (type)
+    {
+      case NoteProblemType::PlaceDoesNotExist:
+        sstr << kPlaceDoesNotExistMessage;
+        break;
+      case NoteProblemType::General:  // Compiler requires all enum cases to be handled in switch.
+        // No additional content should be added.
+        break;
+    }
+    sstr << '\"';
+  }
+
   sstr << " (OSM data version: " << stringVersion << ')';
   m_notes->CreateNote(latLon, sstr.str());
 }
