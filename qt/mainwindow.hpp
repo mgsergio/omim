@@ -5,6 +5,9 @@
 #include "platform/location.hpp"
 #include "platform/location_service.hpp"
 
+#include "openlr/traffic_mode.hpp"
+
+#include "std/array.hpp"
 #include "std/unique_ptr.hpp"
 
 #include <QtWidgets/QApplication>
@@ -31,9 +34,12 @@ namespace qt
     QAction * m_selectionMode;
     QAction * m_clearSelection;
     QAction * m_pSearchAction;
+    QAction * m_saveTrafficSampleAction;
+    QAction * m_quitTrafficModeAction;
     DrawWidget * m_pDrawWidget;
 
-    QDockWidget * m_Docks[1];
+    // TODO(mgsergio): Make indexing more informative.
+    array<QDockWidget *, 2> m_Docks;
 
     QPushButton * m_downloadButton;
     QPushButton * m_retryButton;
@@ -41,6 +47,8 @@ namespace qt
     storage::TCountryId m_lastCountry;
 
     unique_ptr<location::LocationService> const m_locationService;
+
+    unique_ptr<openlr::TrafficMode> m_trafficMode;
 
     Q_OBJECT
 
@@ -61,6 +69,9 @@ namespace qt
     void CreateNavigationBar();
     void CreateSearchBarAndPanel();
     void CreateCountryStatusControls();
+
+    void CreateTrafficPanel();
+    void DestroyTrafficPanel();
 
 #if defined(Q_WS_WIN)
     /// to handle menu messages
@@ -89,5 +100,9 @@ namespace qt
 
     void OnSwitchSelectionMode();
     void OnClearSelection();
+
+    void OnOpenTrafficSample();
+    void OnSaveTrafficSample();
+    void OnQuitTrafficMode();
   };
 }
