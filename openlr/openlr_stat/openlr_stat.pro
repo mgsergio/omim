@@ -7,7 +7,7 @@ ROOT_DIR = ../..
 #                minizip succinct pugixml tess2 gflags oauthcpp
 
 DEPENDENCIES = routing search storage indexer editor platform geometry coding base protobuf \
-               osrm stats_client pugixml openlr jansson succinct
+               osrm stats_client pugixml openlr jansson succinct gflags
 
 include($$ROOT_DIR/common.pri)
 
