@@ -11,7 +11,7 @@ DEPENDENCIES = routing search storage indexer editor platform geometry coding ba
 
 include($$ROOT_DIR/common.pri)
 
-# INCLUDEPATH *= $$ROOT_DIR/3party/gflags/src
+INCLUDEPATH *= $$ROOT_DIR/3party/gflags/src
 
 CONFIG += console warn_on
 CONFIG -= app_bundle
