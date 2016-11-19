@@ -22,7 +22,9 @@
 #include "std/algorithm.hpp"
 #include "std/fstream.hpp"
 #include "std/queue.hpp"
+#include "std/utility.hpp"
 
+using namespace std::rel_ops;
 using namespace routing;
 
 // double constexpr kMwmRoadCrossingRadiusMeters = 2.0;
@@ -46,78 +48,143 @@ double Bearing(m2::PointD const & a, m2::PointD const & b)
   return location::AngleToBearing(my::RadToDeg(ang::AngleTo(a, b)));
 }
 
-class DijkstraRouter
+struct InrixPoint
+{
+  InrixPoint(): m_point(0, 0), m_distanceToNextPointM(0.0) {}
+
+  InrixPoint(openlr::LocationReferencePoint const & lrp)
+    : m_point(MercatorBounds::FromLatLon(lrp.m_latLon))
+    , m_distanceToNextPointM(lrp.m_distanceToNextPoint)
+  {
+  }
+
+  m2::PointD m_point;
+  double m_distanceToNextPointM;
+};
+
+class AStarRouter
 {
 public:
-  size_t const kMaxRoadCandidates = 10;
-  double const kEps = 1e-9;
-  double const kMaxPathLengthM = 6000;
+  static size_t constexpr kMaxRoadCandidates = 10;
+  static double constexpr kDistanceAccuracyM = 25;
+  static double constexpr kEps = 1e-9;
 
-  DijkstraRouter(FeaturesRoadGraph & graph) : m_graph(graph) {}
+  AStarRouter(FeaturesRoadGraph & graph) : m_graph(graph) {}
 
-  bool Go(m2::PointD const & source, m2::PointD const & target, vector<Edge> & path)
+  bool Go(vector<InrixPoint> const & points, vector<Edge> & path)
   {
+    CHECK_GREATER_OR_EQUAL(points.size(), 2, ());
+
     m_graph.ResetFakes();
 
-    Junction const s(source, 0 /* altitude */);
-    Junction const t(target, 0 /* altitude */);
+    m_pivots.clear();
+    for (size_t i = 1; i + 1 < points.size(); ++i)
+    {
+      m_pivots.emplace_back();
+      auto & ps = m_pivots.back();
+
+      vector<pair<Edge, Junction>> vicinity;
+      m_graph.FindClosestEdges(points[i].m_point, kMaxRoadCandidates, vicinity);
+      for (auto const & v : vicinity)
+      {
+        auto const & e = v.first;
+        ps.push_back(e.GetStartJunction().GetPoint());
+        ps.push_back(e.GetEndJunction().GetPoint());
+      }
+    }
+    m_pivots.push_back({points.back().m_point});
+    CHECK_EQUAL(m_pivots.size() + 1, points.size(), ());
+
+    m_bounds.resize(points.size() - 1);
+    m_bounds[0] = points[0].m_distanceToNextPointM;
+    for (size_t i = 1; i < m_bounds.size(); ++i)
+      m_bounds[i] = m_bounds[i - 1] + points[i].m_distanceToNextPointM;
+
+    Vertex const s(Junction(points.front().m_point, 0 /* altitude */), 0 /* stage */);
+    Vertex const t(Junction(points.back().m_point, 0 /* altitude */),
+                   m_pivots.size() - 1 /* stage */);
 
     {
       vector<pair<Edge, Junction>> sourceVicinity;
-      m_graph.FindClosestEdges(source, kMaxRoadCandidates, sourceVicinity);
-      m_graph.AddFakeEdges(s, sourceVicinity);
+      m_graph.FindClosestEdges(points.front().m_point, kMaxRoadCandidates, sourceVicinity);
+      m_graph.AddFakeEdges(s.m_junction, sourceVicinity);
     }
     {
       vector<pair<Edge, Junction>> targetVicinity;
-      m_graph.FindClosestEdges(target, kMaxRoadCandidates, targetVicinity);
-      m_graph.AddFakeEdges(t, targetVicinity);
+      m_graph.FindClosestEdges(points.back().m_point, kMaxRoadCandidates, targetVicinity);
+      m_graph.AddFakeEdges(t.m_junction, targetVicinity);
     }
 
-    priority_queue<pair<double, Junction>> queue;
-    map<Junction, double> distances;
-    map<Junction, Edge> links;
+    using State = pair<Score, Vertex>;
+    priority_queue<State, vector<State>, greater<State>> queue;
+    map<Vertex, Score> scores;
+    map<Vertex, pair<Vertex, Edge>> links;
 
-    queue.emplace(0, s);
-    distances[s] = 0;
+    scores[s] = Score();
+    queue.emplace(scores[s], s);
+
+    double const piS = GetPotential(s);
 
     while (!queue.empty())
     {
       auto const p = queue.top();
       queue.pop();
 
-      double const du = -p.first;
-      Junction const u = p.second;
+      Score const & su = p.first;
+      Vertex const & u = p.second;
+      size_t const stage = u.m_stage;
 
-      if (du > distances[u] + kEps)
+      if (su != scores[u])
         continue;
 
       if (u == t)
       {
         auto cur = t;
-        while (!(cur == s))
+        while (cur != s)
         {
-          auto const & edge = links[cur];
-          path.push_back(edge);
-          cur = edge.GetStartJunction();
+          auto const & p = links[cur];
+          path.push_back(p.second);
+          cur = p.first;
         }
         reverse(path.begin(), path.end());
         return true;
       }
 
-      if (du + Distance(s, t) - Distance(u, t) > kMaxPathLengthM)
+      double const piU = GetPotential(u);
+
+      if (su.m_distance + piS - piU > m_bounds[stage] + kDistanceAccuracyM)
         continue;
 
+      if (piU < kEps && stage + 1 < m_pivots.size())
+      {
+        Vertex uu(u.m_junction, u.m_stage + 1);
+
+        double const piUU = GetPotential(uu);
+
+        Score suu;
+        suu.m_distance = su.m_distance + max(piUU - piU, 0.0);
+        if (scores.count(uu) == 0 || scores[uu] > suu)
+        {
+          scores[uu] = suu;
+          links[uu] = make_pair(u, Edge());
+          queue.emplace(suu, uu);
+        }
+      }
+
       IRoadGraph::TEdgeVector edges;
-      m_graph.GetOutgoingEdges(u, edges);
+      m_graph.GetOutgoingEdges(u.m_junction, edges);
       for (auto const & edge : edges)
       {
-        auto const & v = edge.GetEndJunction();
-        double const dv = du + GetReducedWeight(edge, t);
-        if (distances.count(v) == 0 || distances[v] > dv + kEps)
+        Vertex v(edge.GetEndJunction(), stage);
+        double const piV = GetPotential(v);
+
+        Score sv;
+        sv.m_distance = su.m_distance + max(GetWeight(edge) + piV - piU, 0.0);
+        if (scores.count(v) == 0 || scores[v] > sv)
         {
-          distances[v] = dv;
-          links[v] = edge;
-          queue.emplace(-dv, v);
+          scores[v] = sv;
+          links[v] = make_pair(u, edge);
+          queue.emplace(sv, v);
         }
       }
     }
@@ -126,6 +193,52 @@ public:
   }
 
 private:
+  struct Vertex
+  {
+    Vertex() = default;
+    Vertex(Junction const & junction, size_t stage) : m_junction(junction), m_stage(stage) {}
+
+    inline bool operator<(Vertex const & rhs) const
+    {
+      if (m_stage != rhs.m_stage)
+        return m_stage < rhs.m_stage;
+      return m_junction < rhs.m_junction;
+    }
+
+    inline bool operator==(Vertex const & rhs) const
+    {
+      return m_junction == rhs.m_junction && m_stage == rhs.m_stage;
+    }
+
+    Junction m_junction;
+    size_t m_stage = 0;
+  };
+
+  struct Score
+  {
+    double GetScore() const { return m_distance; }
+
+    bool operator<(Score const & rhs) const { return GetScore() < rhs.GetScore(); }
+    bool operator==(Score const & rhs) const { return GetScore() == rhs.GetScore(); }
+
+    // Reduced length of path in meters.
+    double m_distance = 0.0;
+  };
+
+  double GetPotential(Vertex const & u) const
+  {
+    CHECK_LESS(u.m_stage, m_pivots.size(), ());
+
+    auto const & pivots = m_pivots[u.m_stage];
+
+    double potential = numeric_limits<double>::max();
+
+    auto const & point = u.m_junction.GetPoint();
+    for (auto const & pivot : pivots)
+      potential = min(potential, MercatorBounds::DistanceOnEarth(pivot, point));
+    return potential;
+  }
+
   double Distance(Junction const & u, Junction const & v) const
   {
     return MercatorBounds::DistanceOnEarth(u.GetPoint(), v.GetPoint());
@@ -142,15 +255,10 @@ private:
     return (1 + kEps) * w;
   }
 
-  double GetReducedWeight(Edge const & e, Junction const & t) const
-  {
-    double const w = GetWeight(e);
-    double const piU = Distance(e.GetStartJunction(), t);
-    double const piV = Distance(e.GetEndJunction(), t);
-    return max(w + piV - piU, 0.0);
-  }
-
   FeaturesRoadGraph & m_graph;
+  vector<vector<m2::PointD>> m_pivots;
+  vector<double> m_bounds;
+  m2::PointD m_target;
 };
 
 vector<m2::PointD> GetFeaturePoints(FeatureType const & ft)
@@ -376,11 +484,11 @@ OpenLRSimpleDecoder::OpenLRSimpleDecoder(string const & dataFilename, Index cons
     MYTHROW(DecoderError, ("Can't load file", dataFilename, ":", load_result.description()));
 }
 
-void OpenLRSimpleDecoder::Decode(int const segmentsTohandle)
+void OpenLRSimpleDecoder::Decode(int const segmentsTohandle, bool const multipointsOnly)
 {
   FeaturesRoadGraph roadGraph(m_index, IRoadGraph::Mode::ObeyOnewayTag,
                               make_unique<CarModelFactory>());
-  DijkstraRouter router(roadGraph);
+  AStarRouter astarRouter(roadGraph);
   Stats stats;
 
   ofstream sample("inrix_vs_mwm.txt");
@@ -393,6 +501,11 @@ void OpenLRSimpleDecoder::Decode(int const segmentsTohandle)
 
   for (auto const & segment : segments)
   {
+    auto const & ref = segment.m_locationReference;
+
+    if (ref.m_points.size() == 2 && multipointsOnly)
+      continue;
+
     if (stats.m_total != 0)
       LOG(LINFO, ("Processed:", stats.m_total));
     if (segmentsTohandle != kHandleAllSegmets && stats.m_total == segmentsTohandle)
@@ -415,14 +528,12 @@ void OpenLRSimpleDecoder::Decode(int const segmentsTohandle)
     // LOG(LINFO, ("Number of features", featuresForFirst.size(), "for first point: ", first));
     // LOG(LINFO, ("Number of features", featuresForLast.size(), "for last point: ", last));
 
-    auto const firstPoint = segment.m_locationReference.m_points.front().m_latLon;
-    auto const lastPoint = segment.m_locationReference.m_points.back().m_latLon;
-    auto const segmentID = segment.m_segmentId;
-    LOG(LDEBUG, ("Calculating route from ", firstPoint, lastPoint, "for segment:", segmentID));
+    vector<InrixPoint> points;
+    for (auto const & point : ref.m_points)
+      points.emplace_back(point);
 
     IRoadGraph::TEdgeVector path;
-    if (!router.Go(MercatorBounds::FromLatLon(firstPoint), MercatorBounds::FromLatLon(lastPoint),
-                   path))
+    if (!astarRouter.Go(points, path))
     {
       ++stats.m_routeIsNotCalculated;
       continue;
@@ -433,14 +544,15 @@ void OpenLRSimpleDecoder::Decode(int const segmentsTohandle)
                path.end());
 
     if (path.size() < 4)
+    {
+      LOG(LINFO, ("Skipping short path."));
       continue;
+    }
 
-    sample << segmentID << '\t';
+    sample << segment.m_segmentId << '\t';
     for (auto it = begin(path); it != end(path); ++it)
     {
       auto const & fid = it->GetFeatureId();
-      if (!fid.IsValid())
-        continue;
       sample << fid.m_mwmId.GetInfo()->GetCountryName() << '-'
              << fid.m_index << '-' << it->GetSegId();
       if (next(it) != end(path))
