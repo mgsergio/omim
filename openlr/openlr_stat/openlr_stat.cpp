@@ -72,7 +72,7 @@ int main(int argc, char * argv[])
   routing::CarRouter router(&index, countryFileGetter,
                             routing::CreateCarAStarBidirectionalRouter(index, countryFileGetter));
 
-  OpenLRSimpleDecoder decoder(FLAGS_olr_data_path, index, router);
+  OpenLRSimpleDecoder decoder(FLAGS_olr_data_path, index);
   decoder.Decode(FLAGS_limit, FLAGS_multipoints_only);
 
   return 0;
