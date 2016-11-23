@@ -165,6 +165,8 @@ public:
   void AddTrafficSegments(vector<pair<uint64_t, m2::PolylineD>> const & segments);
   void UpdateTraffic(vector<TrafficSegmentData> const & segmentsData);
 
+  void SetFontScaleFactor(double scaleFactor);
+
 private:
   void AddUserEvent(drape_ptr<UserEvent> && e);
   void ModelViewChanged(ScreenBase const & screen);
@@ -196,6 +198,8 @@ private:
 
   bool m_choosePositionMode = false;
   bool m_kineticScrollEnabled = true;
+
+  friend class DrapeApi;
 };
 
 } // namespace df

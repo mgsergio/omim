@@ -54,6 +54,7 @@ class Edge
 public:
   static Edge MakeFake(Junction const & startJunction, Junction const & endJunction);
 
+  Edge();
   Edge(FeatureID const & featureId, bool forward, uint32_t segId, Junction const & startJunction, Junction const & endJunction);
   Edge(Edge const &) = default;
   Edge & operator=(Edge const &) = default;

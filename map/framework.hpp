@@ -10,6 +10,7 @@
 #include "map/track.hpp"
 
 #include "drape_frontend/gui/skin.hpp"
+#include "drape_frontend/drape_api.hpp"
 #include "drape_frontend/drape_engine.hpp"
 #include "drape_frontend/user_event_stream.hpp"
 #include "drape_frontend/watch/frame_image.hpp"
@@ -32,6 +33,8 @@
 
 #include "storage/downloading_policy.hpp"
 #include "storage/storage.hpp"
+
+#include "tracking/reporter.hpp"
 
 #include "partners_api/booking_api.hpp"
 #include "partners_api/uber_api.hpp"
@@ -160,7 +163,10 @@ protected:
 
   uber::Api m_uberApi;
 
+  df::DrapeApi m_drapeApi;
+
   bool m_isRenderingEnabled;
+  tracking::Reporter m_trackingReporter;
 
   /// This function will be called by m_storage when latest local files
   /// is downloaded.
@@ -188,6 +194,8 @@ public:
   /// Get access to booking api helpers
   BookingApi & GetBookingApi() { return m_bookingApi; }
   BookingApi const & GetBookingApi() const { return m_bookingApi; }
+
+  df::DrapeApi & GetDrapeApi() { return m_drapeApi; }
 
   uber::Api & GetUberApi() { return m_uberApi;}
 
@@ -259,6 +267,9 @@ public:
   storage::CountryInfoGetter & GetCountryInfoGetter() { return *m_infoGetter; }
   StorageDownloadingPolicy & GetDownloadingPolicy() { return m_storageDownloadingPolicy; }
 
+
+  Index const & GetIndex() const { return m_model.GetIndex(); }
+
   /// @name Bookmarks, Tracks and other UserMarks
   //@{
   /// Scans and loads all kml files with bookmarks in WritableDir.
@@ -294,6 +305,9 @@ public:
   BookmarkManager & GetBookmarkManager() { return m_bmManager; }
 
   m2::PointD GetSearchMarkSize(SearchMarkType searchMarkType);
+
+  // Utilities
+  void VisualizeRoadsInRect(m2::RectD const & rect);
 
 protected:
   // search::ViewportSearchCallback::Delegate overrides:
@@ -398,6 +412,7 @@ public:
   void SetMyPositionModeListener(location::TMyPositionModeChanged && fn);
 
 private:
+  bool IsTrackingReporterEnabled() const;
   void OnUserPositionChanged(m2::PointD const & position);
   //@}
 
@@ -426,6 +441,8 @@ public:
   void SetRenderingDisabled(bool destroyContext);
 
   void UpdateDrapeEngine(int width, int height);
+
+  void SetFontScaleFactor(double scaleFactor);
 
 private:
   /// Depends on initialized Drape engine.

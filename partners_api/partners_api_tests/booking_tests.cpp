@@ -6,18 +6,20 @@ UNIT_TEST(Booking_SmokeTest)
 {
   BookingApi api;
 
-  string url = api.GetBookingUrl("http://someurl.com");
+  string url = api.GetBookHotelUrl("http://someurl.com");
   TEST(!url.empty(), ());
 }
 
 UNIT_TEST(Booking_GetMinPrice)
 {
   BookingApi api;
+  api.SetTestingMode(true);
+  string const kHotelId = "98251"; // Special hotel id for testing.
 
   {
     string price;
     string currency;
-    api.GetMinPrice("10340", BookingApi::kDefaultCurrency,
+    api.GetMinPrice(kHotelId, BookingApi::kDefaultCurrency,
                     [&price, &currency](string const & val, string const & curr)
                     {
                       price = val;
@@ -28,13 +30,13 @@ UNIT_TEST(Booking_GetMinPrice)
 
     TEST(!price.empty(), ());
     TEST(!currency.empty(), ());
-    TEST_EQUAL(currency, "EUR", ());
+    TEST_EQUAL(currency, "USD", ());
   }
 
   {
     string price;
     string currency;
-    api.GetMinPrice("10340", "RUB", [&price, &currency](string const & val, string const & curr)
+    api.GetMinPrice(kHotelId, "RUB", [&price, &currency](string const & val, string const & curr)
                     {
                       price = val;
                       currency = curr;
@@ -50,7 +52,7 @@ UNIT_TEST(Booking_GetMinPrice)
   {
     string price;
     string currency;
-    api.GetMinPrice("10340", "ISK", [&price, &currency](string const & val, string const & curr)
+    api.GetMinPrice(kHotelId, "ISK", [&price, &currency](string const & val, string const & curr)
                     {
                       price = val;
                       currency = curr;

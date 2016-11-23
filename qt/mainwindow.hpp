@@ -5,6 +5,7 @@
 #include "platform/location.hpp"
 #include "platform/location_service.hpp"
 
+#include "std/array.hpp"
 #include "std/unique_ptr.hpp"
 
 #include <QtWidgets/QApplication>
@@ -17,6 +18,7 @@
 class QDockWidget;
 class QPushButton;
 class QLabel;
+class TrafficMode;
 
 namespace search { class Result; }
 
@@ -28,10 +30,15 @@ namespace qt
   {
     QAction * m_pMyPositionAction;
     QAction * m_pCreateFeatureAction;
+    QAction * m_selectionMode;
+    QAction * m_clearSelection;
     QAction * m_pSearchAction;
+    QAction * m_saveTrafficSampleAction;
+    QAction * m_quitTrafficModeAction;
     DrawWidget * m_pDrawWidget;
 
-    QDockWidget * m_Docks[1];
+    // TODO(mgsergio): Make indexing more informative.
+    array<QDockWidget *, 2> m_Docks;
 
     QPushButton * m_downloadButton;
     QPushButton * m_retryButton;
@@ -39,6 +46,9 @@ namespace qt
     storage::TCountryId m_lastCountry;
 
     unique_ptr<location::LocationService> const m_locationService;
+
+    // This object is managet by Qt memory system.
+    TrafficMode * m_trafficMode = nullptr;
 
     Q_OBJECT
 
@@ -59,6 +69,9 @@ namespace qt
     void CreateNavigationBar();
     void CreateSearchBarAndPanel();
     void CreateCountryStatusControls();
+
+    void CreateTrafficPanel(string const & dataFilePath, string const & sampleFilePath);
+    void DestroyTrafficPanel();
 
 #if defined(Q_WS_WIN)
     /// to handle menu messages
@@ -84,5 +97,12 @@ namespace qt
 
     void OnDownloadClicked();
     void OnRetryDownloadClicked();
+
+    void OnSwitchSelectionMode();
+    void OnClearSelection();
+
+    void OnOpenTrafficSample();
+    void OnSaveTrafficSample();
+    void OnQuitTrafficMode();
   };
 }

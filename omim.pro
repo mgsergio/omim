@@ -23,7 +23,7 @@ HEADERS += defines.hpp
   CONFIG *= desktop
 }
 
-SUBDIRS = 3party base coding geometry editor indexer routing search
+SUBDIRS = 3party base coding geometry editor indexer routing search openlr
 
 !CONFIG(osrm) {
   SUBDIRS *= platform stats storage
@@ -34,6 +34,10 @@ SUBDIRS = 3party base coding geometry editor indexer routing search
     generator_tool.subdir = generator/generator_tool
     generator_tool.depends = $$SUBDIRS
     SUBDIRS *= generator_tool
+
+    openlr_stat.subdir = openlr/openlr_stat
+    openlr_stat.depends = $$SUBDIRS
+    SUBDIRS *= openlr_stat
   }
 
   # Integration tests dependencies for gtool.
@@ -60,11 +64,15 @@ SUBDIRS = 3party base coding geometry editor indexer routing search
     feature_segments_checker.subdir = generator/feature_segments_checker
     feature_segments_checker.depends = $$SUBDIRS routing
     SUBDIRS *= routing_integration_tests routing_consistency_tests srtm_coverage_checker feature_segments_checker
+
+    openlr_tests.subdir = openlr/openlr_tests
+    opnelr_tests.depends = $$SUBDIRS platform_tests_support
+    SUBDIRS *= openlr_tests
   }
 }
 
 !CONFIG(gtool):!CONFIG(osrm) {
-  SUBDIRS *= drape drape_frontend partners_api map
+  SUBDIRS *= drape drape_frontend partners_api tracking map
 
   CONFIG(map_designer):CONFIG(desktop) {
     SUBDIRS *= skin_generator
@@ -248,5 +256,10 @@ SUBDIRS = 3party base coding geometry editor indexer routing search
     partners_api_tests.subdir = partners_api/partners_api_tests
     partners_api_tests.depends = base platform partners_api
     SUBDIRS *= partners_api_tests
+
+    tracking_tests.subdir = tracking/tracking_tests
+    tracking_tests.depends = base platform tracking
+    SUBDIRS *= tracking_tests
+
   } # !no-tests
 } # !gtool

@@ -1,5 +1,6 @@
 #include "routing/bicycle_directions.hpp"
 #include "routing/bicycle_model.hpp"
+#include "routing/car_model.hpp"
 #include "routing/features_road_graph.hpp"
 #include "routing/nearest_edge_finder.hpp"
 #include "routing/pedestrian_directions.hpp"
@@ -308,6 +309,19 @@ unique_ptr<IRouter> CreateBicycleAStarBidirectionalRouter(Index & index, TCountr
   unique_ptr<IRouter> router(new RoadGraphRouter(
       "astar-bidirectional-bicycle", index, countryFileFn, IRoadGraph::Mode::ObeyOnewayTag,
       move(vehicleModelFactory), move(algorithm), move(directionsEngine)));
+  return router;
+}
+
+unique_ptr<RoadGraphRouter> CreateCarAStarBidirectionalRouter(Index & index, TCountryFileFn const & countryFileFn)
+{
+  unique_ptr<IVehicleModelFactory> vehicleModelFactory = make_unique<CarModelFactory>();
+  unique_ptr<IRoutingAlgorithm> algorithm = make_unique<AStarBidirectionalRoutingAlgorithm>();
+  // @TODO Bicycle turn generation engine is used now. It's ok for the time being.
+  // But later a special car turn generation engine should be implemented.
+  unique_ptr<IDirectionsEngine> directionsEngine = make_unique<BicycleDirectionsEngine>(index);
+  unique_ptr<RoadGraphRouter> router = make_unique<RoadGraphRouter>(
+      "astar-bidirectional-bicycle", index, countryFileFn, IRoadGraph::Mode::ObeyOnewayTag,
+      move(vehicleModelFactory), move(algorithm), move(directionsEngine));
   return router;
 }
 }  // namespace routing

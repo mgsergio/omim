@@ -6,12 +6,14 @@
 #include "map/user_mark.hpp"
 
 #include "defines.hpp"
+#include "private.h"
 
+#include "routing/car_router.hpp"
 #include "routing/online_absent_fetcher.hpp"
-#include "routing/osrm_router.hpp"
 #include "routing/road_graph_router.hpp"
 #include "routing/route.hpp"
 #include "routing/routing_algorithm.hpp"
+#include "routing/routing_helpers.hpp"
 
 #include "search/downloader_search_callback.hpp"
 #include "search/editor_delegate.hpp"
@@ -60,6 +62,7 @@
 #include "platform/platform.hpp"
 #include "platform/preferred_languages.hpp"
 #include "platform/settings.hpp"
+#include "platform/socket.hpp"
 
 #include "coding/internal/file_data.hpp"
 #include "coding/zip_reader.hpp"
@@ -72,6 +75,8 @@
 #include "geometry/distance_on_sphere.hpp"
 #include "geometry/rect2d.hpp"
 #include "geometry/triangle2d.hpp"
+
+#include "partners_api/opentable_api.hpp"
 
 #include "base/logging.hpp"
 #include "base/math.hpp"
@@ -200,6 +205,8 @@ void Framework::OnLocationUpdate(GpsInfo const & info)
 
   CallDrapeFunction(bind(&df::DrapeEngine::SetGpsInfo, _1, rInfo,
                          m_routingSession.IsNavigable(), routeMatchingInfo));
+  if (IsTrackingReporterEnabled())
+    m_trackingReporter.AddLocation(info);
 }
 
 void Framework::OnCompassUpdate(CompassInfo const & info)
@@ -222,6 +229,19 @@ void Framework::SwitchMyPositionNextMode()
 void Framework::SetMyPositionModeListener(TMyPositionModeChanged && fn)
 {
   m_myPositionListener = move(fn);
+}
+
+bool Framework::IsTrackingReporterEnabled() const
+{
+  if (m_currentRouterType != routing::RouterType::Vehicle)
+    return false;
+
+  if (!m_routingSession.IsOnRoute())
+    return false;
+
+  bool enableTracking = false;
+  UNUSED_VALUE(settings::Get(tracking::Reporter::kEnableTrackingKey, enableTracking));
+  return enableTracking;
 }
 
 void Framework::OnUserPositionChanged(m2::PointD const & position)
@@ -314,6 +334,8 @@ Framework::Framework()
   , m_storage(platform::migrate::NeedMigrate() ? COUNTRIES_OBSOLETE_FILE : COUNTRIES_FILE)
   , m_bmManager(*this)
   , m_isRenderingEnabled(true)
+  , m_trackingReporter(platform::CreateSocket(), TRACKING_REALTIME_HOST, TRACKING_REALTIME_PORT,
+                       tracking::Reporter::kPushDelayMs)
   , m_displacementModeManager([this](bool show) {
     int const mode = show ? dp::displacement::kHotelMode : dp::displacement::kDefaultMode;
     CallDrapeFunction(bind(&df::DrapeEngine::SetDisplacementMode, _1, mode));
@@ -412,6 +434,7 @@ Framework::Framework()
 
 Framework::~Framework()
 {
+  m_drapeApi.SetEngine(nullptr);
   m_drapeEngine.reset();
 
   m_model.SetOnMapDeregisteredCallback(nullptr);
@@ -683,8 +706,15 @@ bool Framework::DeleteBmCategory(size_t index)
 void Framework::FillBookmarkInfo(Bookmark const & bmk, BookmarkAndCategory const & bac, place_page::Info & info) const
 {
   FillPointInfo(bmk.GetPivot(), string(), info);
+  info.m_countryId = m_infoGetter->GetRegionCountryId(info.GetMercator());
+
   info.m_bac = bac;
-  info.m_bookmarkCategoryName = GetBmCategory(bac.first)->GetName();
+  BookmarkCategory * cat = GetBmCategory(bac.m_categoryIndex);
+  info.m_bookmarkCategoryName = cat->GetName();
+  BookmarkData const & data = static_cast<Bookmark const *>(cat->GetUserMark(bac.m_bookmarkIndex))->GetData();
+  info.m_bookmarkTitle = data.GetName();
+  info.m_bookmarkColorName = data.GetType();
+  info.m_bookmarkDescription = data.GetDescription();
 }
 
 void Framework::FillFeatureInfo(FeatureID const & fid, place_page::Info & info) const
@@ -754,17 +784,25 @@ void Framework::FillInfoFromFeatureType(FeatureType const & ft, place_page::Info
   if (ftypes::IsAddressObjectChecker::Instance()(ft))
     info.m_address = GetAddressInfoAtPoint(feature::GetCenter(ft)).FormatHouseAndStreet();
 
-  info.m_isHotel = ftypes::IsHotelChecker::Instance()(ft);
   if (ftypes::IsBookingChecker::Instance()(ft))
   {
-    info.m_isSponsoredHotel = true;
-    string const & baseUrl = info.GetMetadata().Get(feature::Metadata::FMD_WEBSITE);
-    info.m_sponsoredBookingUrl = GetBookingApi().GetBookingUrl(baseUrl);
+    info.m_sponsoredType = SponsoredType::Booking;
+    auto const & baseUrl = info.GetMetadata().Get(feature::Metadata::FMD_WEBSITE);
+    info.m_sponsoredUrl = GetBookingApi().GetBookHotelUrl(baseUrl);
     info.m_sponsoredDescriptionUrl = GetBookingApi().GetDescriptionUrl(baseUrl);
   }
+  else if (ftypes::IsOpentableChecker::Instance()(ft))
+  {
+    info.m_sponsoredType = SponsoredType::Opentable;
+    auto const & sponsoredId = info.GetMetadata().Get(feature::Metadata::FMD_SPONSORED_ID);
+    auto const & url = opentable::Api::GetBookTableUrl(sponsoredId);
+    info.m_sponsoredUrl = url;
+    info.m_sponsoredDescriptionUrl = url;
+  }
+
 
   info.m_canEditOrAdd = featureStatus != osm::Editor::FeatureStatus::Obsolete && CanEditMap() &&
-                        !info.IsSponsoredHotel();
+                        !info.IsSponsored();
 
   info.m_localizedWifiString = m_stringsBundle.GetString("wifi");
   info.m_localizedRatingString = m_stringsBundle.GetString("place_page_booking_rating");
@@ -801,7 +839,7 @@ void Framework::ShowBookmark(BookmarkAndCategory const & bnc)
 {
   StopLocationFollow();
 
-  Bookmark const * mark = static_cast<Bookmark const *>(GetBmCategory(bnc.first)->GetUserMark(bnc.second));
+  Bookmark const * mark = static_cast<Bookmark const *>(GetBmCategory(bnc.m_categoryIndex)->GetUserMark(bnc.m_bookmarkIndex));
 
   double scale = mark->GetScale();
   if (scale == -1.0)
@@ -1154,7 +1192,7 @@ bool Framework::SearchInViewport(search::ViewportSearchParams const & params)
       static_cast<search::ViewportSearchCallback::Delegate &>(*this),
       [params](search::Results const & results) {
         if (results.IsEndMarker() && params.m_onCompleted)
-          GetPlatform().RunOnGuiThread([params]() { params.m_onCompleted(); });
+          GetPlatform().RunOnGuiThread([params, results]() { params.m_onCompleted(results); });
       });
   SetCurrentPositionIfPossible(p);
 
@@ -1618,6 +1656,8 @@ void Framework::CreateDrapeEngine(ref_ptr<dp::OGLContextFactory> contextFactory,
   {
     GetPlatform().RunOnGuiThread([this, sizes](){ m_searchMarksSizes = sizes; });
   });
+
+  m_drapeApi.SetEngine(make_ref(m_drapeEngine));
 }
 
 void Framework::UpdateDrapeEngine(int width, int height)
@@ -1629,6 +1669,8 @@ void Framework::UpdateDrapeEngine(int width, int height)
     InvalidateUserMarks();
 
     UpdatePlacePageInfoForCurrentSelection();
+
+    m_drapeApi.Invalidate();
 
     //TODO: update traffic data
   }
@@ -1704,6 +1746,14 @@ void Framework::OnUpdateGpsTrackPointsCallback(vector<pair<size_t, location::Gps
   }
 
   m_drapeEngine->UpdateGpsTrackPoints(move(pointsAdd), move(indicesRemove));
+}
+
+void Framework::SetFontScaleFactor(double scaleFactor)
+{
+  ASSERT(m_drapeEngine.get() != nullptr, ());
+  m_drapeEngine->SetFontScaleFactor(scaleFactor);
+
+  InvalidateRect(GetCurrentViewport());
 }
 
 void Framework::MarkMapStyle(MapStyle mapStyle)
@@ -1893,31 +1943,31 @@ bool Framework::GetFeatureByID(FeatureID const & fid, FeatureType & ft) const
 
 BookmarkAndCategory Framework::FindBookmark(UserMark const * mark) const
 {
-  BookmarkAndCategory empty = MakeEmptyBookmarkAndCategory();
-  BookmarkAndCategory result = empty;
+  BookmarkAndCategory empty;
+  BookmarkAndCategory result;
   ASSERT_LESS_OR_EQUAL(GetBmCategoriesCount(), numeric_limits<int>::max(), ());
   for (size_t i = 0; i < GetBmCategoriesCount(); ++i)
   {
     if (mark->GetContainer() == GetBmCategory(i))
     {
-      result.first = static_cast<int>(i);
+      result.m_categoryIndex = static_cast<int>(i);
       break;
     }
   }
 
-  ASSERT(result.first != empty.first, ());
-  BookmarkCategory const * cat = GetBmCategory(result.first);
+  ASSERT(result.m_categoryIndex != empty.m_categoryIndex, ());
+  BookmarkCategory const * cat = GetBmCategory(result.m_categoryIndex);
   ASSERT_LESS_OR_EQUAL(cat->GetUserMarkCount(), numeric_limits<int>::max(), ());
   for (size_t i = 0; i < cat->GetUserMarkCount(); ++i)
   {
     if (mark == cat->GetUserMark(i))
     {
-      result.second = static_cast<int>(i);
+      result.m_bookmarkIndex = static_cast<int>(i);
       break;
     }
   }
 
-  ASSERT(result != empty, ());
+  ASSERT(result.IsValid(), ());
   return result;
 }
 
@@ -1936,7 +1986,7 @@ void Framework::ActivateMapSelection(bool needAnimation, df::SelectionShape::ESe
   CallDrapeFunction(bind(&df::DrapeEngine::SelectObject, _1, selectionType, info.GetMercator(), info.GetID(),
                          needAnimation));
 
-  SetDisplacementMode(DisplacementModeManager::SLOT_MAP_SELECTION, info.IsHotel() /* show */);
+  SetDisplacementMode(DisplacementModeManager::SLOT_MAP_SELECTION, ftypes::IsHotelChecker::Instance()(info.GetTypes()) /* show */);
 
   if (m_activateMapSelectionFn)
     m_activateMapSelectionFn(info);
@@ -2012,7 +2062,7 @@ void Framework::OnTapEvent(TapEvent const & tapEvent)
       // Older version of statistics used "$GetUserMark" event.
       alohalytics::Stats::Instance().LogEvent("$SelectMapObject", kv, alohalytics::Location::FromLatLon(ll.lat, ll.lon));
 
-      if (info.IsHotel())
+      if (info.m_sponsoredType == SponsoredType::Booking)
         GetPlatform().SendMarketingEvent("Placepage_Hotel_book", {{"provider", "booking.com"}});
     }
 
@@ -2348,7 +2398,8 @@ void Framework::SetRouterImpl(RouterType type)
       return m_model.GetIndex().GetMwmIdByCountryFile(CountryFile(countryFile)).IsAlive();
     };
 
-    router.reset(new OsrmRouter(&m_model.GetIndex(), countryFileGetter));
+    router.reset(new CarRouter(&m_model.GetIndex(), countryFileGetter,
+                               CreateCarAStarBidirectionalRouter(m_model.GetIndex(), countryFileGetter)));
     fetcher.reset(new OnlineAbsentCountriesFetcher(countryFileGetter, localFileChecker));
     m_routingSession.SetRoutingSettings(routing::GetCarRoutingSettings());
   }
@@ -2500,8 +2551,8 @@ RouterType Framework::GetBestRouter(m2::PointD const & startPoint, m2::PointD co
     {
       return m_infoGetter->GetRegionCountryId(pt);
     };
-    if (!OsrmRouter::CheckRoutingAbility(startPoint, finalPoint, countryFileGetter,
-                                         &m_model.GetIndex()))
+    if (!CarRouter::CheckRoutingAbility(startPoint, finalPoint, countryFileGetter,
+                                        &m_model.GetIndex()))
     {
       return RouterType::Pedestrian;
     }
@@ -2665,7 +2716,9 @@ bool Framework::ParseEditorDebugCommand(search::SearchParams const & params)
                                                DebugPrint(types), types.GetBestType(), smd));
     }
     params.m_onResults(results);
-    params.m_onResults(search::Results::GetEndMarker(false));
+
+    results.SetEndMarker(false /* isCancelled */);
+    params.m_onResults(results);
     return true;
   }
   else if (params.m_query == "?eclear")
@@ -3085,4 +3138,42 @@ bool Framework::GenerateRouteAltitudeChart(uint32_t width, uint32_t height,
     break;
   }
   return true;
+}
+
+namespace
+{
+  vector<dp::Color> colorList = { dp::Color(255, 0, 0, 255), dp::Color(0, 255, 0, 255), dp::Color(0, 0, 255, 255),
+                                  dp::Color(255, 255, 0, 255), dp::Color(0, 255, 255, 255), dp::Color(255, 0, 255, 255),
+                                  dp::Color(100, 0, 0, 255), dp::Color(0, 100, 0, 255), dp::Color(0, 0, 100, 255),
+                                  dp::Color(100, 100, 0, 255), dp::Color(0, 100, 100, 255), dp::Color(100, 0, 100, 255)
+                                };
+} // namespace
+
+void Framework::VisualizeRoadsInRect(m2::RectD const & rect)
+{
+  int constexpr kScale = scales::GetUpperScale();
+  size_t counter = 0;
+  m_model.ForEachFeature(rect, [this, &counter, &rect](FeatureType & ft)
+  {
+    if (routing::IsRoad(feature::TypesHolder(ft)))
+    {
+      bool allPointsOutside = true;
+      vector<m2::PointD> points;
+      ft.ForEachPoint([&points, &rect, &allPointsOutside](m2::PointD const & pt)
+      {
+        if (rect.IsPointInside(pt))
+          allPointsOutside = false;
+        points.push_back(pt);
+      }, kScale);
+
+      if (!allPointsOutside)
+      {
+        size_t const colorIndex = counter % colorList.size();
+        m_drapeApi.AddLine(strings::to_string(ft.GetID().m_index),
+                           df::DrapeApiLineData(points, colorList[colorIndex])
+                                                .Width(3.0f).ShowPoints(true).ShowId());
+        counter++;
+      }
+    }
+  }, kScale);
 }

@@ -5,17 +5,23 @@
 #include "qt/preferences_dialog.hpp"
 #include "qt/search_panel.hpp"
 #include "qt/slider_ctrl.hpp"
+#include "qt/traffic_mode.hpp"
+#include "qt/traffic_panel.hpp"
+#include "qt/trafficmodeinitdlg.h"
 
 #include "defines.hpp"
 
 #include "platform/settings.hpp"
 #include "platform/platform.hpp"
 
+#include "openlr/openlr_sample.hpp"
+
 #include "std/bind.hpp"
 #include "std/sstream.hpp"
 #include "std/target_os.hpp"
 
 #include <QtGui/QCloseEvent>
+#include <QFileDialog>
 
 #if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
   #include <QtGui/QAction>
@@ -54,6 +60,189 @@
 #endif // NO_DOWNLOADER
 
 
+namespace
+{
+struct GroupedSegments
+{
+  FeatureID m_fid;
+  vector<uint32_t> m_segments;
+  bool m_asc;
+};
+
+vector<GroupedSegments>
+GroupSegmentsByFeatureIDAndDirection(DecodedSampleItem const & item,
+                                     map<FeatureID, FeatureType> const & features)
+{
+  // TODO(mgsergio): Grouped segments.
+  vector<GroupedSegments> groupedSegmentsPool;
+
+  using SegIdIt = typename vector<uint32_t>::const_iterator;
+
+  auto const checkMonotone = [](vector<uint32_t> const & v, bool & isFirstAsc) -> vector<SegIdIt>
+  {
+    // Any sequence of the length less than 3 is always monotone.
+    if (v.size() < 3)
+    {
+      if (v.size() == 2)
+        isFirstAsc = v[0] < v[1];
+      else
+        // Let't assume that points of sigle feature segmetn should be traversed in ascenging order.
+        // I.e. segId = 1 consists of points p1 and p2, but not p0 and p1.
+        isFirstAsc = true;
+      return {};
+    }
+
+    vector<SegIdIt> inverses;
+
+    auto firstIt = begin(v);
+    auto secondIt = next(firstIt);
+    bool asc = *firstIt < *secondIt;
+    isFirstAsc = asc;
+    for (; secondIt != end(v); ++firstIt, ++secondIt)
+    {
+      if (asc != *firstIt < *secondIt)
+      {
+        inverses.push_back(secondIt);
+        asc = !asc;
+      }
+    }
+
+    inverses.push_back(end(v));
+
+    return inverses;
+  };
+
+  auto const fixMonotone = [&groupedSegmentsPool, &checkMonotone]()
+  {
+    auto const & inverses = checkMonotone(groupedSegmentsPool.back().m_segments,
+                                          groupedSegmentsPool.back().m_asc);
+    if (inverses.empty())
+      return;
+
+    auto & segmentsWithInverses = groupedSegmentsPool.back();
+
+    auto inverseBegin = begin(inverses);
+    auto inverseEnd = next(inverseBegin);
+    for (;inverseEnd != end(inverses); ++inverseBegin, ++inverseEnd)
+    {
+      GroupedSegments grouped;
+      grouped.m_fid = segmentsWithInverses.m_fid;
+      copy(*inverseBegin, *inverseEnd, back_inserter(grouped.m_segments));
+      groupedSegmentsPool.push_back(grouped);
+    }
+    segmentsWithInverses.m_segments.erase(*begin(inverses), end(segmentsWithInverses.m_segments));
+  };
+
+  auto it = begin(item.m_segments);
+  auto lastFeatureId = it->m_fid;
+
+  if (it != end(item.m_segments))
+  {
+    groupedSegmentsPool.emplace_back();
+    groupedSegmentsPool.back().m_fid = it->m_fid;
+    groupedSegmentsPool.back().m_segments.push_back(it->m_segId);
+    ++it;
+  }
+
+  for (;it != end(item.m_segments); ++it)
+  {
+    if (it->m_fid != groupedSegmentsPool.back().m_fid)
+    {
+      fixMonotone();
+      groupedSegmentsPool.emplace_back();
+      groupedSegmentsPool.back().m_fid = it->m_fid;
+      groupedSegmentsPool.back().m_segments.push_back(it->m_segId);
+      continue;
+    }
+    groupedSegmentsPool.back().m_segments.push_back(it->m_segId);
+  }
+  fixMonotone();
+
+  return groupedSegmentsPool;
+}
+
+// TODO(mgsergio): Consider getting rid of this class: just put everything
+// in TrafficMode.
+class TrafficDrawerDelegate : public ITrafficDrawerDelegate
+{
+public:
+  explicit TrafficDrawerDelegate(qt::DrawWidget * drawWidget)
+    : m_framework(drawWidget->GetFramework())
+    , m_drapeApi(m_framework.GetDrapeApi())
+  {
+  }
+
+  // TrafficDrawerDelegate(TrafficDrawerDelegate const &) = delete;
+  // TrafficDrawerDelegate(TrafficDrawerDelegate &&) = delete;
+
+  // TrafficDrawerDelegate & operator=(TrafficDrawerDelegate const &) = delete;
+  // TrafficDrawerDelegate & operator=(TrafficDrawerDelegate &&) = delete;
+
+  // ~TrafficDrawerDelegate() = default;
+
+  void SetViewportCenter(m2::PointD const & center) override
+  {
+    m_framework.SetViewportCenter(center);
+  }
+
+  void DrawDecodedSegments(DecodedSample const & sample, int sampleIndex) override
+  {
+    auto const & groupedSegments = GroupSegmentsByFeatureIDAndDirection(
+        sample.m_decodedItems[sampleIndex],
+        sample.m_features);
+    for (auto const & group : groupedSegments)
+    {
+      vector<m2::PointD> points;
+      auto const & feature = sample.m_features.find(group.m_fid)->second;
+
+      auto lastSegId = group.m_segments.front();
+      if (!group.m_asc)
+        points.push_back(feature.GetPoint(lastSegId + 1));
+      for (auto const & segId : group.m_segments)
+      {
+        points.push_back(feature.GetPoint(segId));
+        lastSegId = segId;
+      }
+      if (group.m_asc)
+        points.push_back(feature.GetPoint(lastSegId + 1));
+
+      if (points.empty())
+      {
+        LOG(LERROR, ("Empty group, group id:", group.m_fid, "Sample id:",
+                     sample.m_decodedItems[sampleIndex].m_partnerSegmentId.Get()));
+        continue;
+      }
+
+      LOG(LINFO, ("Decoded segment", points));
+      m_drapeApi.AddLine(NextLineId(),
+                         df::DrapeApiLineData(points, dp::Color(0, 0, 255, 255))
+                         .Width(3.0f).ShowPoints(true));//.ShowId());
+    }
+  }
+
+  void DrawEncodedSegment(openlr::LinearSegment const & segment) override
+  {
+    auto const & points = segment.GetMercatorPoints();
+    m_drapeApi.AddLine(NextLineId(),
+                       df::DrapeApiLineData(points, dp::Color(255, 0, 0, 255))
+                         .Width(3.0f).ShowPoints(true));//.ShowId());
+  }
+
+  void Clear() override
+  {
+    m_drapeApi.Clear();
+  }
+
+private:
+  string NextLineId() { return strings::to_string(m_lineId++); }
+
+  uint32_t m_lineId = 0;
+
+  Framework & m_framework;
+  df::DrapeApi & m_drapeApi;
+};
+}  // namespace
+
 namespace qt
 {
 
@@ -61,7 +250,9 @@ namespace qt
 extern char const * kTokenKeySetting;
 extern char const * kTokenSecretSetting;
 
-MainWindow::MainWindow() : m_locationService(CreateDesktopLocationService(*this))
+MainWindow::MainWindow()
+  : m_Docks{}
+  , m_locationService(CreateDesktopLocationService(*this))
 {
   // Always runs on the first desktop
   QDesktopWidget const * desktop(QApplication::desktop());
@@ -97,6 +288,21 @@ MainWindow::MainWindow() : m_locationService(CreateDesktopLocationService(*this)
 
   setWindowTitle(tr("MAPS.ME"));
   setWindowIcon(QIcon(":/ui/logo.png"));
+
+  QMenu * trafficMarkup = new QMenu(tr("Traffic"), this);
+  menuBar()->addMenu(trafficMarkup);
+  trafficMarkup->addAction(tr("Open sample"), this, SLOT(OnOpenTrafficSample()));
+  m_saveTrafficSampleAction = trafficMarkup->addAction(tr("Save sample"), this,
+                                                       SLOT(OnSaveTrafficSample()));
+  m_saveTrafficSampleAction->setEnabled(false);
+
+  m_quitTrafficModeAction = new QAction(tr("Quit traffic mode"), this);
+  // On Macos actions with names started with quit or exit are threadet specially,
+  // see QMenuBar documentation.
+  m_quitTrafficModeAction->setMenuRole(QAction::MenuRole::NoRole);
+  m_quitTrafficModeAction->setEnabled(false);
+  connect(m_quitTrafficModeAction, SIGNAL(triggered()), this, SLOT(OnQuitTrafficMode()));
+  trafficMarkup->addAction(m_quitTrafficModeAction);
 
 #ifndef OMIM_OS_WINDOWS
   QMenu * helpMenu = new QMenu(tr("Help"), this);
@@ -278,21 +484,28 @@ void MainWindow::CreateNavigationBar()
 
   {
     // TODO(AlexZ): Replace icon.
-    m_pCreateFeatureAction = pToolBar->addAction(QIcon(":/navig64/select.png"),
-                                           tr("Create Feature"),
-                                           this,
-                                           SLOT(OnCreateFeatureClicked()));
+    m_pCreateFeatureAction = pToolBar->addAction(QIcon(":/navig64/select.png"), tr("Create Feature"),
+                                                 this, SLOT(OnCreateFeatureClicked()));
     m_pCreateFeatureAction->setCheckable(true);
     m_pCreateFeatureAction->setToolTip(tr("Please select position on a map."));
     m_pCreateFeatureAction->setShortcut(QKeySequence::New);
 
     pToolBar->addSeparator();
 
+    m_selectionMode = pToolBar->addAction(QIcon(":/navig64/selectmode.png"), tr("Selection mode"),
+                                          this, SLOT(OnSwitchSelectionMode()));
+    m_selectionMode->setCheckable(true);
+    m_selectionMode->setToolTip(tr("Turn on/off selection mode"));
+
+    m_clearSelection = pToolBar->addAction(QIcon(":/navig64/clear.png"), tr("Clear selection"),
+                                           this, SLOT(OnClearSelection()));
+    m_clearSelection->setToolTip(tr("Clear selection"));
+
+    pToolBar->addSeparator();
+
     // Add search button with "checked" behavior.
-    m_pSearchAction = pToolBar->addAction(QIcon(":/navig64/search.png"),
-                                           tr("Search"),
-                                           this,
-                                           SLOT(OnSearchButtonClicked()));
+    m_pSearchAction = pToolBar->addAction(QIcon(":/navig64/search.png"), tr("Search"),
+                                          this, SLOT(OnSearchButtonClicked()));
     m_pSearchAction->setCheckable(true);
     m_pSearchAction->setToolTip(tr("Offline Search"));
     m_pSearchAction->setShortcut(QKeySequence::Find);
@@ -475,6 +688,12 @@ void MainWindow::OnCreateFeatureClicked()
   }
 }
 
+void MainWindow::OnSwitchSelectionMode()
+{
+  m_pDrawWidget->SetSelectionMode(m_selectionMode->isChecked());
+}
+
+void MainWindow::OnClearSelection() { m_pDrawWidget->GetFramework().GetDrapeApi().Clear(); }
 void MainWindow::OnSearchButtonClicked()
 {
   if (m_pSearchAction->isChecked())
@@ -541,7 +760,7 @@ void MainWindow::CreateSearchBarAndPanel()
 void MainWindow::CreatePanelImpl(size_t i, Qt::DockWidgetArea area, QString const & name,
                                  QKeySequence const & hotkey, char const * slot)
 {
-  ASSERT_LESS(i, ARRAY_SIZE(m_Docks), ());
+  ASSERT_LESS(i, m_Docks.size(), ());
   m_Docks[i] = new QDockWidget(name, this);
 
   addDockWidget(area, m_Docks[i]);
@@ -557,6 +776,24 @@ void MainWindow::CreatePanelImpl(size_t i, Qt::DockWidgetArea area, QString cons
     connect(pAct, SIGNAL(triggered()), this, slot);
     addAction(pAct);
   }
+}
+
+void MainWindow::CreateTrafficPanel(string const & dataFilePath, string const & sampleFilePath)
+{
+  CreatePanelImpl(1, Qt::RightDockWidgetArea, tr("Traffic"), QKeySequence(), nullptr);
+
+  m_trafficMode = new TrafficMode(dataFilePath, sampleFilePath,
+                                     m_pDrawWidget->GetFramework().GetIndex(),
+                                     make_unique<TrafficDrawerDelegate>(m_pDrawWidget));
+  m_Docks[1]->setWidget(new TrafficPanel(m_trafficMode, m_Docks[1]));
+  m_Docks[2]->adjustSize();
+}
+
+void MainWindow::DestroyTrafficPanel()
+{
+  removeDockWidget(m_Docks[1]);
+  delete m_Docks[1];
+  m_Docks[1] = nullptr;
 }
 
 void MainWindow::closeEvent(QCloseEvent * e)
@@ -575,4 +812,37 @@ void MainWindow::OnRetryDownloadClicked()
   m_pDrawWidget->RetryToDownloadCountry(m_lastCountry);
 }
 
+void MainWindow::OnOpenTrafficSample()
+{
+  TrafficModeInitDlg dlg;
+  dlg.exec();
+  if (dlg.result() != QDialog::DialogCode::Accepted)
+    return;
+
+  LOG(LDEBUG, ("Traffic mode enabled"));
+  CreateTrafficPanel(dlg.GetDataFilePath(), dlg.GetSampleFilePath());
+  m_quitTrafficModeAction->setEnabled(true);
+  m_saveTrafficSampleAction->setEnabled(true);
+  m_Docks[1]->show();
 }
+
+void MainWindow::OnSaveTrafficSample()
+{
+  auto const & fileName = QFileDialog::getSaveFileName(this, tr("Save sample"));
+  if (fileName.isEmpty())
+    return;
+
+  if (!m_trafficMode->SaveSampleAs(fileName.toStdString()))
+    ;// TODO(mgsergio): Show error dlg;
+}
+
+void MainWindow::OnQuitTrafficMode()
+{
+  // If not saved, ask a user if he/she wants to save.
+  // OnSaveTrafficSample()
+  m_quitTrafficModeAction->setEnabled(false);
+  m_saveTrafficSampleAction->setEnabled(false);
+  DestroyTrafficPanel();
+  m_trafficMode = nullptr;
+}
+}  // namespace qt
