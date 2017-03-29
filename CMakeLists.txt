@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.2)
 
 project(omim C CXX)
 
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# options
+option(PYBINDINGS "Create makefiles for building python bindings" OFF)
 
 # Set environment variables
 
@@ -90,13 +91,15 @@ if (PLATFORM_MAC)
   set(Boost_USE_STATIC_RUNTIME ON)
 endif()
 
-if (PYBINDINGS)
-  find_package(Boost 1.54 REQUIRED COMPONENTS python3)
-else()
-  find_package(Boost 1.54)
-endif()
+find_package(Boost 1.54)
 
 if (PYBINDINGS)
+  if (PYTHON_VERSION VERSION_GREATER 3.0)
+    set(_Boost_PYTHON3_HEADERS "boost/python.hpp")
+    find_package(Boost 1.54 REQUIRED COMPONENTS python3)
+  else()
+    find_package(Boost 1.54 REQUIRED COMPONENTS python)
+  endif()
   find_package(PythonLibs ${PYTHON_VERSION} REQUIRED)
   include_directories(${PYTHON_INCLUDE_DIRS})
 endif()
@@ -226,6 +229,8 @@ function(link_qt5_network target)
 endfunction()
 
 # End of functions for subdirectories
+
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Include subdirectories
 add_subdirectory(3party/jansson)
