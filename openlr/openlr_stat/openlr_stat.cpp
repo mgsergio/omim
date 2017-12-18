@@ -48,6 +48,8 @@ DEFINE_string(ids_path, "", "Path to a file with segment ids to process.");
 DEFINE_string(countries_filename, "",
               "Name of countries file which describes mwm tree. Used to get country specific "
               "routing restrictions.");
+// TODO(mgsergio): Remove this when there is only one algo.
+DEFINE_bool(new_algo, false, "Use new decoding algorithm");
 
 using namespace openlr;
 
@@ -257,7 +259,10 @@ int main(int argc, char * argv[])
   auto const segments = LoadSegments(document);
 
   std::vector<DecodedPath> paths(segments.size());
-  decoder.Decode(segments, numThreads, paths);
+  if (FLAGS_new_algo)
+    decoder.DecodeV2(segments, numThreads, paths);
+  else
+    decoder.DecodeV1(segments, numThreads, paths);
 
   SaveNonMatchedIds(FLAGS_non_matched_ids, paths);
   if (!FLAGS_assessment_output.empty())

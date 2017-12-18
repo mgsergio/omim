@@ -1,8 +1,8 @@
 #pragma once
 
-#include "base/exception.hpp"
+#include "openlr/stats.hpp"
 
-#include <routing/road_graph.hpp>
+#include "base/exception.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -18,6 +18,9 @@ struct LinearSegment;
 struct DecodedPath;
 
 DECLARE_EXCEPTION(DecoderError, RootException);
+
+class Graph;
+class RoadInfoGetter;
 
 class OpenLRDecoder
 {
@@ -41,10 +44,16 @@ public:
                 CountryParentNameGetterFn const & countryParentNameGetterFn);
 
   // Maps partner segments to mwm paths. |segments| should be sorted by partner id.
-  void Decode(std::vector<LinearSegment> const & segments, uint32_t const numThreads,
-              std::vector<DecodedPath> & paths);
+  void DecodeV1(std::vector<LinearSegment> const & segments, uint32_t const numThreads,
+                std::vector<DecodedPath> & paths);
+
+  void DecodeV2(std::vector<LinearSegment> const & segments, uint32_t const /* numThreads */,
+                std::vector<DecodedPath> & paths);
 
 private:
+  bool DecodeOne(LinearSegment const & segment, Index const & index, Graph & g,
+                 RoadInfoGetter & inforGetter, DecodedPath & path, v2::Stats & stat);
+
   std::vector<Index> const & m_indexes;
   CountryParentNameGetterFn m_countryParentNameGetterFn;
 };
