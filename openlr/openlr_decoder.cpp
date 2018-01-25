@@ -312,34 +312,61 @@ void OpenLRDecoder::DecodeV1(vector<LinearSegment> const & segments, uint32_t co
 }
 
 void OpenLRDecoder::DecodeV2(vector<LinearSegment> const & segments,
-                             uint32_t const /* numThreads */, vector<DecodedPath> & paths)
+                             uint32_t const numThreads, vector<DecodedPath> & paths)
 {
-  Graph graph(m_indexes.back(), make_unique<CarModelFactory>(m_countryParentNameGetterFn));
+  // This code computes the most optimal (in the sense of cache lines
+  // occupancy) batch size.
+  size_t constexpr a = my::LCM(sizeof(LinearSegment), kCacheLineSize) / sizeof(LinearSegment);
+  size_t constexpr b =
+      my::LCM(sizeof(IRoadGraph::TEdgeVector), kCacheLineSize) / sizeof(IRoadGraph::TEdgeVector);
+  size_t constexpr kBatchSize = my::LCM(a, b);
+  size_t constexpr kProgressFrequency = 100;
 
-  v2::Stats stat;
-  my::Timer timer;
-  RoadInfoGetter infoGetter(m_indexes.back());
-  for (size_t i = 0; i < segments.size(); ++i)
-  {
-    if (!DecodeOne(segments[i], m_indexes.back(), graph, infoGetter, paths[i], stat))
-      ++stat.m_routesFailed;
-    ++stat.m_routesHandled;
+  auto const worker = [&segments, &paths, kBatchSize, kProgressFrequency, numThreads, this](
+                          size_t threadNum, Index const & index, v2::Stats & stat) {
 
-    if (i % 100 == 0 || i == segments.size() - 1)
+    size_t const numSegments = segments.size();
+
+    Graph graph(index, make_unique<CarModelFactory>(m_countryParentNameGetterFn));
+
+    my::Timer timer;
+    RoadInfoGetter infoGetter(index);
+    for (size_t i = threadNum * kBatchSize; i < numSegments; i += numThreads * kBatchSize)
     {
-      LOG(LINFO, (i, "segments are processed in",
-                  timer.ElapsedSeconds(),
-                  "seconds"));
-      timer.Reset();
-    }
-  }
+      for (size_t j = i; j < numSegments && j < i + kBatchSize; ++j)
+      {
+        if (!DecodeOne(segments[j], index, graph, infoGetter, paths[j], stat))
+          ++stat.m_routesFailed;
+        ++stat.m_routesHandled;
 
-  LOG(LINFO, ("Total routes handled:", stat.m_routesHandled));
-  LOG(LINFO, ("Failed:", stat.m_routesFailed));
-  LOG(LINFO, ("No candidate lines:", stat.m_noCandidateFound));
-  LOG(LINFO, ("Wrong dnp:", stat.m_dnpIsZero));
-  LOG(LINFO, ("Wrong offsets:", stat.m_wrongOffsets));
-  LOG(LINFO, ("No shortest path:", stat.m_noShortestPathFound));
+        if (stat.m_routesHandled % kProgressFrequency == 0 || i == segments.size() - 1)
+        {
+          LOG(LINFO, ("Thread", threadNum, "processed", stat.m_routesHandled,
+                      "failed:", stat.m_routesFailed));
+          timer.Reset();
+        }
+      }
+    }
+  };
+
+  vector<v2::Stats> stats(numThreads);
+  vector<thread> workers;
+  for (size_t i = 1; i < numThreads; ++i)
+    workers.emplace_back(worker, i, ref(m_indexes[i]), ref(stats[i]));
+  worker(0 /* threadNum */, m_indexes[0], stats[0]);
+  for (auto & worker : workers)
+    worker.join();
+
+  v2::Stats allStats;
+  for (auto const & s : stats)
+    allStats.Add(s);
+
+  LOG(LINFO, ("Total routes handled:", allStats.m_routesHandled));
+  LOG(LINFO, ("Failed:", allStats.m_routesFailed));
+  LOG(LINFO, ("No candidate lines:", allStats.m_noCandidateFound));
+  LOG(LINFO, ("Wrong dnp:", allStats.m_dnpIsZero));
+  LOG(LINFO, ("Wrong offsets:", allStats.m_wrongOffsets));
+  LOG(LINFO, ("No shortest path:", allStats.m_noShortestPathFound));
 }
 
 bool OpenLRDecoder::DecodeOne(LinearSegment const & segment, Index const & index, Graph & graph,

@@ -47,7 +47,7 @@ public:
   void DecodeV1(std::vector<LinearSegment> const & segments, uint32_t const numThreads,
                 std::vector<DecodedPath> & paths);
 
-  void DecodeV2(std::vector<LinearSegment> const & segments, uint32_t const /* numThreads */,
+  void DecodeV2(std::vector<LinearSegment> const & segments, uint32_t const numThreads,
                 std::vector<DecodedPath> & paths);
 
 private:
