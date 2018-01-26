@@ -119,6 +119,8 @@ void ExpandFakes(Index const & index, Graph & g, Graph::EdgeVector & path)
   ASSERT(!path.empty(), ());
 
   ExpandFake(path, begin(path), index, g);
+  if (path.empty())
+    return;
   ExpandFake(path, --end(path), index, g);
 }
 
